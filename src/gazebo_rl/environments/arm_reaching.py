@@ -86,11 +86,9 @@ class ArmReacher():
         """
         raise NotImplementedError
 
-
-
     def step(self, action):
-        if not len(action) == self.n_actions:
-            raise ValueError("Action must have length {}".format(self.n_actions))
+        # if not len(action) == self.n_actions:
+        #     raise ValueError("Action must have length {}".format(self.n_actions))
         
         try: 
             action = self.get_action(action)
@@ -101,7 +99,7 @@ class ArmReacher():
         
         if self.sim:
             if self.cartesian_control:
-                if self.relative_commands:
+                if not self.relative_commands:
                     self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
                 else:
                     self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
