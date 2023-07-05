@@ -17,4 +17,4 @@ arm = Arm()
 arm.home_arm()
 
 env = ArmReacher2D()
-print(env.step([.01, .01, .01, .01, .01, .01, .01, .01]))
+print(env.step([0,0,0,0,.2,0]))

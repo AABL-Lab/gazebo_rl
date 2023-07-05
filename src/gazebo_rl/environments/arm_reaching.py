@@ -44,7 +44,7 @@ class ArmReacher():
         self.episode_time = episode_time
         self.stack_size = stack_size
         self.sparse_rewards = sparse_rewards
-        self.success_threshhold = success_threshold
+        self.success_threshold = success_threshold
         self.home_arm = home_arm
         self.with_pixels = with_pixels
         self.max_vel = max_vel
@@ -74,7 +74,7 @@ class ArmReacher():
                 self.arm.goto_joint_pose(self.reset_pose)
         return self.get_obs()
 
-    def get_reward(self, action):
+    def get_reward(self, observation):
         """
             Returns the reward and whether the episode is done
         """
@@ -111,7 +111,7 @@ class ArmReacher():
 
         # check if we have reached the goal
         obs = self.get_obs()
-        reward, done = self.get_reward(action)
+        reward, done = self.get_reward(obs)
         return obs, reward, done
 
 if __name__ == '__main__':
