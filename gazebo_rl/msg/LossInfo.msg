@@ -1,0 +1,4 @@
+float64 act_loss
+float64 disc_loss
+float64 disc_log_probs
+float64 disc_crit
