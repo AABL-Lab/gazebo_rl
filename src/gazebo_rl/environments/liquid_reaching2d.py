@@ -9,7 +9,7 @@ from kortex_driver.srv import *
 from kortex_driver.msg import *
 from gazebo_rl.environments.arm_reaching import ArmReacher
 
-class ArmReacher2D(ArmReacher):
+class LiquidReacher2D(ArmReacher):
     # inherits from ArmReacher
     def __init__(self, max_action=1, min_action=-1, n_actions=2, action_duration=.2, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.01, wrist_rotate_limit=.3,home_arm=True, with_pixels=False, max_vel=.3,

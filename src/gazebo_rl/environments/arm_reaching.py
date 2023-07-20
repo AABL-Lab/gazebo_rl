@@ -9,8 +9,8 @@ from kortex_driver.srv import *
 from kortex_driver.msg import *
 
 class ArmReacher():
-    def __init__(self, max_action=1, min_action=-1, n_actions=1, action_duration=.2, reset_pose=None, episode_time=60, 
-        stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3,
+    def __init__(self, max_action=1, min_action=-1, n_actions=1, action_duration=.5, reset_pose=None, episode_time=60, 
+        stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3, 
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
         goal_dimensions=3):
         
@@ -48,6 +48,7 @@ class ArmReacher():
         self.home_arm = home_arm
         self.with_pixels = with_pixels
         self.max_vel = max_vel
+        #self.action_timout = action_timout
         self.cartesian_control = cartesian_control
         self.relative_commands = relative_commands
         self.sim = sim
@@ -64,7 +65,7 @@ class ArmReacher():
         return np.array(rospy.wait_for_message(self.observation_topic, ObsMessage).obs)
 
     def reset(self):
-        time.sleep(.5)
+        rospy.sleep(.5)
         if self.reset_pose is None:
             self.arm.home_arm()
         else:
@@ -107,13 +108,19 @@ class ArmReacher():
             if self.cartesian_control:
                 if not self.relative_commands:
                     self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
                 else:
                     self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
+                    self.arm.stop_arm()
             else:
                 if self.relative_commands:
                     self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
                 else:
                     self.arm.goto_joint_pose(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
+                    self.arm.stop_arm()
 
         # check if we have reached the goal
         obs = self.get_obs()
