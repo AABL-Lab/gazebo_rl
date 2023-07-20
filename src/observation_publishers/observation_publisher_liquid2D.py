@@ -8,7 +8,7 @@ from kortex_driver.msg import *
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import JointState
 
-current_observation = np.zeros(3)
+current_observation = np.zeros(4)
 
 # with velocity:
 # current_observation = np.zeros(18)
@@ -34,14 +34,14 @@ def eef_pose(data):
     z_pose = data.base.tool_pose_z
     #y_vel = np.deg2rad(data.base.imu_angular_velocity_y)
     # y_vel = data.interconnect.imu_angular_velocity_z/10
-    #y_twist = np.deg2rad(data.base.tool_pose_theta_y)
+    y_twist = np.deg2rad(data.base.tool_pose_theta_y)
     #z_vel = np.deg2rad(data.base.imu_angular_velocity_z)
     # z_vel = data.interconnect.imu_angular_velocity_x/10
     #z_vel = data.base.imu_acceleration_z/10
     current_observation[0] = x_pose
     current_observation[1] = y_pose
     current_observation[2] = z_pose
-    #current_observation[3] = y_twist
+    current_observation[3] = y_twist
 
     # x_vel = data.base.imu_acceleration_x 
     # y_vel = data.base.imu_acceleration_y

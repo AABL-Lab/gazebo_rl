@@ -74,7 +74,13 @@ class ArmReacher():
                 self.arm.goto_joint_pose(self.reset_pose)
         return self.get_obs()
 
-    def get_reward(self, observation):
+    # def get_reward(self, observation):
+    #     """
+    #         Returns the reward and whether the episode is done
+    #     """
+    #     raise NotImplementedError
+    
+    def get_reward(self, observation, action):
         """
             Returns the reward and whether the episode is done
         """
@@ -111,7 +117,7 @@ class ArmReacher():
 
         # check if we have reached the goal
         obs = self.get_obs()
-        reward, done = self.get_reward(obs)
+        reward, done = self.get_reward(obs, action)
         return obs, reward, done
 
 if __name__ == '__main__':
