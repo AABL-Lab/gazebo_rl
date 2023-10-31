@@ -34,7 +34,9 @@ def eef_pose(data):
     z_pose = data.base.tool_pose_z
     #y_vel = np.deg2rad(data.base.imu_angular_velocity_y)
     # y_vel = data.interconnect.imu_angular_velocity_z/10
-    #y_twist = np.deg2rad(data.base.tool_pose_theta_y)
+    x_twist = np.deg2rad(data.base.tool_pose_theta_x)
+    y_twist = np.deg2rad(data.base.tool_pose_theta_y)
+    z_twist = np.deg2rad(data.base.tool_pose_theta_z)
     #z_vel = np.deg2rad(data.base.imu_angular_velocity_z)
     # z_vel = data.interconnect.imu_angular_velocity_x/10
     #z_vel = data.base.imu_acceleration_z/10

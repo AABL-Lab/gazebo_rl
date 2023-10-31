@@ -10,18 +10,23 @@ from kortex_driver.msg import *
 from gazebo_rl.environments.arm_reaching import ArmReacher
 import gymnasium as gym
 
-class ArmReacher2D(ArmReacher):
+class ArmReacherFragile(ArmReacher):
     # inherits from ArmReacher
+    # "fragile" refers to the policy carrying a fragile object, and
+    # should not move too high up
     def __init__(self, max_action=1, min_action=-1, n_actions=1, action_duration=.2, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.01, home_arm=True, with_pixels=False, max_vel=.3,
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
-        goal_dimensions=3, goal_pose=None):
+        goal_dimensions=3, goal_pose=None, max_height=.2):
         super().__init__(max_action, min_action, n_actions, action_duration, reset_pose, episode_time,
             stack_size, sparse_rewards, success_threshold, home_arm, with_pixels, max_vel,
             cartesian_control, relative_commands, sim, workspace_limits, observation_topic,
             goal_dimensions)
         
-        
+        # max height for the arm before violating fragile constraint
+        # this is included in the observation space
+        self.max_height = max_height
+
         if goal_pose is None:
             if workspace_limits is None:
                 self.goal_pose = np.array([.5, .5])
@@ -31,17 +36,21 @@ class ArmReacher2D(ArmReacher):
         else:
             self.goal_pose = goal_pose
         self.goal_pose = np.array(self.goal_pose)
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(rospy.wait_for_message(self.observation_topic, ObsMessage).obs) + 2,))
 
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(rospy.wait_for_message(self.observation_topic, ObsMessage).obs) + 3,))
 
     def get_obs(self):
         # append the goal pose to the observation
         obs = super().get_obs() 
+        # append the max height to the observation
+        obs = np.append(obs, self.max_height)
         obs = np.append(obs, self.goal_pose)
+
         return obs  
     
     def get_reward(self, observation):
         current_pose = observation[:2]
+        current_height = observation[2]
         goal_pose = observation[-2:]
         dist = np.linalg.norm(current_pose - goal_pose)
         print("dist: ", dist)
@@ -51,8 +60,14 @@ class ArmReacher2D(ArmReacher):
             return 10, True
         else:
             if self.sparse_rewards:
+                # check if max height is violated
+                if current_height > self.max_height:
+                    return -5, False
                 return 0, False
             else:
+                # check if max height is violated
+                if current_height > self.max_height:
+                    return -5, False
                 return -dist, False
         
     def get_action(self, action):
