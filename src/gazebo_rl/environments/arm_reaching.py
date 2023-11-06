@@ -15,7 +15,7 @@ class ArmReacher(gym.Env):
     def __init__(self, max_action=1, min_action=-1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3, 
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
-        goal_dimensions=3):
+        goal_dimensions=3, max_steps=500):
         
         """
             Generic point reaching class for the Gen3 robot.
@@ -61,6 +61,8 @@ class ArmReacher(gym.Env):
         # observation space is the size of the observation topic
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(input_size,), dtype=np.float32)
         self.goal_dimensions = goal_dimensions
+        self.max_steps = max_steps
+        self.current_step = 0
         self.arm = Arm()
 
         if workspace_limits is None:
@@ -101,6 +103,7 @@ class ArmReacher(gym.Env):
         raise NotImplementedError
 
     def step(self, action):
+        self.current_step += 1
         # if not len(action) == self.n_actions:
         #     raise ValueError("Action must have length {}".format(self.n_actions))
         
@@ -117,7 +120,6 @@ class ArmReacher(gym.Env):
                     self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                 else:
-                    print("action: ", action)
                     self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                     self.arm.stop_arm()
@@ -133,6 +135,11 @@ class ArmReacher(gym.Env):
         # check if we have reached the goal
         obs = self._get_obs()
         reward, done = self._get_reward(obs, action)
+
+        if self.current_step >= self.max_steps:
+            done = True
+            self.current_step = 0
+
         return obs, reward, done, {}
     
     def render(self):

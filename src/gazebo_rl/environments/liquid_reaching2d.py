@@ -46,6 +46,7 @@ class LiquidReacher2D(ArmReacher):
     def reset(self):
         self.goal_pose = [np.random.uniform(self.workspace_limits[0], self.workspace_limits[1]),
                                     np.random.uniform(self.workspace_limits[2], self.workspace_limits[3])]
+        print("EPISODE DONE")
         return super().reset()
     
     def _get_obs(self):
@@ -59,9 +60,9 @@ class LiquidReacher2D(ArmReacher):
         wrist_pose = observation[3]
         goal_pose = observation[-2:]
         dist = np.linalg.norm(current_pose - goal_pose)
-        print("dist: ", dist)
-        print("goal_pose: ", goal_pose)
-        print("current_pose: ", current_pose)
+        # print("dist: ", dist)
+        # print("goal_pose: ", goal_pose)
+        # print("current_pose: ", current_pose)
         rew = 0
         if np.abs(wrist_pose) > self.wrist_rotate_limit:
             if action[0] > self.action_movement_threshold or action[1] > self.action_movement_threshold:
@@ -81,7 +82,7 @@ class LiquidReacher2D(ArmReacher):
                 return -dist, False
         
     def _get_action(self, action):
-        print("action TEST: ", action)
+        # print("action TEST: ", action)
         if self.sim:
             return np.array([action[0], action[1], 0, 0, action[2], 0])
         else:
