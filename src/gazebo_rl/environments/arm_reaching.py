@@ -7,9 +7,12 @@ from gen3_testing.gen3_movement_utils import Arm
 from custom_arm_reaching.msg import ObsMessage
 from kortex_driver.srv import *
 from kortex_driver.msg import *
+import gymnasium as gym
+from gymnasium.spaces import Box
+from gym import spaces
 
-class ArmReacher():
-    def __init__(self, max_action=1, min_action=-1, n_actions=1, action_duration=.5, reset_pose=None, episode_time=60, 
+class ArmReacher(gym.Env):
+    def __init__(self, max_action=1, min_action=-1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3, 
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
         goal_dimensions=3):
@@ -36,10 +39,12 @@ class ArmReacher():
                 observation_topic (str): topic to subscribe to for observations
                 goal_dimensions (int): number of dimensions for the goal (assumes goal position is the last n dimensions)
         """
+        super().__init__()
         self.max_action = max_action
         self.min_action = min_action
         self.action_duration = action_duration
         self.n_actions = n_actions
+        self.action_space = spaces.Box(low=min_action, high=max_action, shape=(n_actions,), dtype=np.float32)
         self.reset_pose = reset_pose
         self.episode_time = episode_time
         self.stack_size = stack_size
@@ -53,6 +58,8 @@ class ArmReacher():
         self.relative_commands = relative_commands
         self.sim = sim
         self.observation_topic = observation_topic
+        # observation space is the size of the observation topic
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(input_size,), dtype=np.float32)
         self.goal_dimensions = goal_dimensions
         self.arm = Arm()
 
@@ -61,7 +68,7 @@ class ArmReacher():
         else:
             self.workspace_limits = workspace_limits
 
-    def get_obs(self):
+    def _get_obs(self):
         return np.array(rospy.wait_for_message(self.observation_topic, ObsMessage).obs)
 
     def reset(self):
@@ -73,7 +80,7 @@ class ArmReacher():
                 self.arm.goto_joint_pose_sim(self.reset_pose)
             else:
                 self.arm.goto_joint_pose(self.reset_pose)
-        return self.get_obs()
+        return self._get_obs()
 
     # def get_reward(self, observation):
     #     """
@@ -81,13 +88,13 @@ class ArmReacher():
     #     """
     #     raise NotImplementedError
     
-    def get_reward(self, observation, action):
+    def _get_reward(self, observation, action):
         """
             Returns the reward and whether the episode is done
         """
         raise NotImplementedError
     
-    def get_action(self, action):
+    def _get_action(self, action):
         """
             Applies any necessary transformations to the action 
         """
@@ -97,10 +104,10 @@ class ArmReacher():
         # if not len(action) == self.n_actions:
         #     raise ValueError("Action must have length {}".format(self.n_actions))
         
-        try: 
-            action = self.get_action(action)
-        except:
-            pass
+        # try: 
+        #     action = self._get_action(action)
+        # except:
+        #     pass
 
         action = np.clip(np.array(action), self.min_action, self.max_action)
         
@@ -110,6 +117,7 @@ class ArmReacher():
                     self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                 else:
+                    print("action: ", action)
                     self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                     self.arm.stop_arm()
@@ -123,9 +131,17 @@ class ArmReacher():
                     self.arm.stop_arm()
 
         # check if we have reached the goal
-        obs = self.get_obs()
-        reward, done = self.get_reward(obs, action)
-        return obs, reward, done
+        obs = self._get_obs()
+        reward, done = self._get_reward(obs, action)
+        return obs, reward, done, {}
+    
+    def render(self):
+        pass
+    
+    def close(self):
+        self.arm.stop_arm()
+        self.arm.home_arm()
+        rospy.sleep(.5)
 
 if __name__ == '__main__':
     try:
