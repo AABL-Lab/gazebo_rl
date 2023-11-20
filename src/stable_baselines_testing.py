@@ -24,6 +24,22 @@ arm.home_arm()
 env = LiquidReacher2D()
 # check_env(env)
 
-model = SAC("MlpPolicy", env, verbose=1, learning_rate=.003)
-model.learn(total_timesteps=200000, log_interval=10)
-model.save("sac_nav2d_MediumXandYpenalty_highLR")
+model = SAC("MlpPolicy", env, verbose=1, learning_rate=.0003)
+model.learn(total_timesteps=1000000, log_interval=10)
+model.save("src/xy_liquid_reacher_p1ST")
+
+# # load model
+# model = SAC.load("src/xy_liquid_reacher.zip")
+
+# # # test model
+# obs = env.reset(visualize=True)
+# action = np.array([0.001,.001,0])
+# for i in range(1000):
+#     action, _states = model.predict(obs, deterministic=True)
+#     # if i % 10 == 0:
+#        # action = -np.array(action)
+#     obs, rewards, dones, info = env.step(action)
+#     print(action, rewards)
+#     env.render()
+#     if dones:
+#         obs = env.reset(visualize=True)
