@@ -24,22 +24,28 @@ arm.home_arm()
 env = LiquidReacher2D()
 # check_env(env)
 
-model = SAC("MlpPolicy", env, verbose=1, learning_rate=.0003)
-model.learn(total_timesteps=1000000, log_interval=10)
-model.save("src/xy_liquid_reacher_p1ST")
+# model = SAC("MlpPolicy", env, verbose=1, learning_rate=.0003)
+# # model = SAC.load("src/xy_liquid_reacher_p1ST")
+# # model.set_env(env)
+# model.learn(total_timesteps=1250000, log_interval=10)
+# model.save("src/xy_liquid_reacher_p1ST_v3")
 
-# # load model
-# model = SAC.load("src/xy_liquid_reacher.zip")
+# load model
+model = SAC.load("src/xy_liquid_reacher_p1ST_v3.zip")
 
-# # # test model
-# obs = env.reset(visualize=True)
-# action = np.array([0.001,.001,0])
-# for i in range(1000):
-#     action, _states = model.predict(obs, deterministic=True)
-#     # if i % 10 == 0:
-#        # action = -np.array(action)
-#     obs, rewards, dones, info = env.step(action)
-#     print(action, rewards)
-#     env.render()
-#     if dones:
-#         obs = env.reset(visualize=True)
+# # test model
+obs = env.reset(visualize=True)
+action = np.array([0.001,.001,0])
+for i in range(1000):
+    action, _states = model.predict(obs, deterministic=True)
+    # if i % 10 == 0:
+       # action = -np.array(action)
+    obs, rewards, dones, info = env.step(action)
+    print(action, rewards)
+    # env.render(visualize=True)
+    if rewards > 0:
+        print("SUCCESS")
+        env.reset(visualize=True)
+
+    # if i % 1 == 0:
+    #     obs = env.reset(visualize=True)
