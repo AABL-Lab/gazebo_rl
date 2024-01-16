@@ -40,6 +40,7 @@ for i in range(1000):
     action, _states = model.predict(obs, deterministic=True)
     # if i % 10 == 0:
        # action = -np.array(action)
+    action[2] = -.99
     obs, rewards, dones, info = env.step(action)
     print(action, rewards)
     # env.render(visualize=True)

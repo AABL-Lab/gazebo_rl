@@ -17,7 +17,7 @@ class LiquidReacher2D(ArmReacher):
 
     # inherits from ArmReacher
     def __init__(self, max_action=.1, min_action=-.1, n_actions=3, action_duration=.2, reset_pose=None, episode_time=60, 
-        stack_size=4, sparse_rewards=False, success_threshold=.1, wrist_rotate_limit=.3,home_arm=True, with_pixels=False, max_vel=.3,
+        stack_size=4, sparse_rewards=False, success_threshold=.08, wrist_rotate_limit=.3,home_arm=True, with_pixels=False, max_vel=.3,
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
         goal_dimensions=3, goal_pose=None, action_movement_threshold=.01):
         ArmReacher.__init__(self, max_action=max_action, min_action=min_action, n_actions=n_actions, input_size=5,
@@ -68,6 +68,13 @@ class LiquidReacher2D(ArmReacher):
         # print("current_pose: ", current_pose)
         # print("wrist_pose: ", wrist_pose)
         rew = 0
+        # check if xy position is out of bounds
+        if current_pose[0] < self.workspace_limits[0] or current_pose[0] > self.workspace_limits[1]:
+            rew = -200
+            return rew, True
+        if current_pose[1] < self.workspace_limits[2] or current_pose[1] > self.workspace_limits[3]:
+            rew = -200
+            return rew, True
         if np.abs(wrist_pose) > self.wrist_rotate_limit:
             if action[0] > self.action_movement_threshold or action[1] > self.action_movement_threshold:
                 rew = -100
@@ -77,8 +84,11 @@ class LiquidReacher2D(ArmReacher):
                 return rew, False
         else:
             if dist < self.success_threshold:
-                rew = 10
-                return rew, True
+                rew = 100
+                # set a new goal pose
+                self.goal_pose = [np.random.uniform(self.workspace_limits[0], self.workspace_limits[1]),
+                                    np.random.uniform(self.workspace_limits[2], self.workspace_limits[3])]
+                return rew, False
             if self.sparse_rewards:
                 return 0, False
             else:

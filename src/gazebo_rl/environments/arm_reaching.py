@@ -15,7 +15,7 @@ class ArmReacher(gym.Env):
     def __init__(self, max_action=.1, min_action=-.1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3, 
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
-        goal_dimensions=3, max_steps=100):
+        goal_dimensions=3, max_steps=200):
         
         """
             Generic point reaching class for the Gen3 robot.
@@ -66,7 +66,7 @@ class ArmReacher(gym.Env):
         self.arm = Arm()
 
         if workspace_limits is None:
-            self.workspace_limits = [0,1,-1,1,.1,.3]
+            self.workspace_limits = [.15,.8,-.5,.5,.1,.3]
         else:
             self.workspace_limits = workspace_limits
 
