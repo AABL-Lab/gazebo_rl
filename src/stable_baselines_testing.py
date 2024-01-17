@@ -6,6 +6,7 @@ import time
 from gen3_testing.gen3_movement_utils import Arm
 from gazebo_rl.environments.arm_reaching2d import ArmReacher
 from gazebo_rl.environments.liquid_reaching2d import LiquidReacher2D
+from gazebo_rl.environments.liquid_reaching2d_armpy import LiquidReacher2D as ArmPyLiquidReacher2D
 
 
 from stable_baselines3 import TD3, SAC
@@ -21,7 +22,7 @@ arm = Arm()
 arm.home_arm()
 
 # setup sac training
-env = LiquidReacher2D()
+env = ArmPyLiquidReacher2D()
 # check_env(env)
 
 # model = SAC("MlpPolicy", env, verbose=1, learning_rate=.0003)
@@ -31,7 +32,7 @@ env = LiquidReacher2D()
 # model.save("src/xy_liquid_reacher_p1ST_v3")
 
 # load model
-model = SAC.load("src/xy_liquid_reacher_p1ST_v3.zip")
+model = SAC.load("xy_liquid_reacher_p1ST_v3")
 
 # # test model
 obs = env.reset(visualize=True)
@@ -40,7 +41,7 @@ for i in range(1000):
     action, _states = model.predict(obs, deterministic=True)
     # if i % 10 == 0:
        # action = -np.array(action)
-    action[2] = -.99
+    # action[2] = -.99
     obs, rewards, dones, info = env.step(action)
     print(action, rewards)
     # env.render(visualize=True)

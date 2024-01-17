@@ -9,7 +9,7 @@ import armpy
 from custom_arm_reaching.msg import ObsMessage
 from kortex_driver.srv import *
 from kortex_driver.msg import *
-from gazebo_rl.environments.arm_reaching import ArmReacher
+from gazebo_rl.environments.arm_reaching_armpy import ArmReacher
 import gymnasium as gym
 
 class LiquidReacher2D(ArmReacher):
