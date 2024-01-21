@@ -44,9 +44,12 @@ class LiquidReacher2D(ArmReacher):
     def step(self, action):
         return super().step(self._get_action(action))
     
-    def reset(self, visualize=False):
-        self.goal_pose = [np.random.uniform(self.workspace_limits[0], self.workspace_limits[1]),
-                                    np.random.uniform(self.workspace_limits[2], self.workspace_limits[3])]
+    def reset(self, visualize=False, goal_pose=None):
+        if goal_pose is not None:
+            self.goal_pose = goal_pose
+        else:
+            self.goal_pose = [np.random.uniform(self.workspace_limits[0], self.workspace_limits[1]),
+                                        np.random.uniform(self.workspace_limits[2], self.workspace_limits[3])]
         if visualize:
             os.system(f"gz marker -m 'action: ADD_MODIFY, type: SPHERE, id: 2, scale: {{x:0.1, y:0.1, z:.1}}, pose: {{position: {{x:{self.goal_pose[0]} y:{self.goal_pose[1]}, z:0.06701185554265976}}, orientation: {{x:0.0, y:0.0, z:0.0, w:1.0}}}}'")
         print("EPISODE DONE")
