@@ -61,6 +61,9 @@ class LiquidReacher2D(ArmReacher):
         obs = np.append(obs, self.goal_pose)
         return obs 
     
+    def _set_goal(self, goal_pose):
+        self.goal_pose = goal_pose
+    
     def _get_reward(self, observation, action):
         current_pose = observation[:2]
         wrist_pose = observation[2]
