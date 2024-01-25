@@ -113,7 +113,7 @@ class ArmReacher(gym.Env):
         #     pass
 
         action = np.clip(np.array(action), self.min_action, self.max_action)
-        # print("action: ", action)
+        print("action: ", action)
         if self.sim:
             if self.cartesian_control:
                 if not self.relative_commands:
@@ -131,7 +131,24 @@ class ArmReacher(gym.Env):
                     self.arm.goto_joint_pose(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                     self.arm.stop_arm()
-
+        else:
+            if self.cartesian_control:
+                if not self.relative_commands:
+                    self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
+                else:
+                    print(action)
+                    self.arm.goto_cartesian_pose_old(action, relative=True, radians=True)
+                    rospy.sleep(self.action_duration)
+                    # self.arm.stop_arm()
+            else:
+                if self.relative_commands:
+                    self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
+                else:
+                    self.arm.goto_joint_pose(action, speed=self.max_vel)
+                    rospy.sleep(self.action_duration)
+                    self.arm.stop_arm()
         # check if we have reached the goal
         obs = self._get_obs()
         reward, done = self._get_reward(obs, action)

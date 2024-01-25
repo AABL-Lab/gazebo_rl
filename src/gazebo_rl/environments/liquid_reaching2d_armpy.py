@@ -18,7 +18,7 @@ class LiquidReacher2D(ArmReacher):
     # inherits from ArmReacher
     def __init__(self, max_action=.1, min_action=-.1, n_actions=3, action_duration=.2, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.08, wrist_rotate_limit=.3,home_arm=True, with_pixels=False, max_vel=.3,
-        cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="/rl_observation",
+        cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="rl_observation",
         goal_dimensions=3, goal_pose=None, action_movement_threshold=.01):
         ArmReacher.__init__(self, max_action=max_action, min_action=min_action, n_actions=n_actions, input_size=5,
             action_duration=action_duration, reset_pose=reset_pose, episode_time=episode_time,
@@ -106,6 +106,6 @@ class LiquidReacher2D(ArmReacher):
         if self.sim:
             return np.array([action[0], action[1], 0, 0, action[2], 0])
         else:
-            return np.array([action[0], action[1], 0, 0, -action[2]])
+            return np.array([action[0], action[1], 0, 0, 0, -action[2]])
     
         
