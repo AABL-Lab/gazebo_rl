@@ -113,7 +113,7 @@ class ArmReacher(gym.Env):
         #     pass
 
         action = np.clip(np.array(action), self.min_action, self.max_action)
-        print("action: ", action)
+        # print("action: ", action)
         if self.sim:
             if self.cartesian_control:
                 if not self.relative_commands:
