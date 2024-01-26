@@ -41,8 +41,9 @@ class LiquidReacher2D(ArmReacher):
         self.action_movement_threshold = action_movement_threshold
 
 
-    def step(self, action):
-        return super().step(self._get_action(action))
+    # with args and kwargs
+    def step(self, action, *args, **kwargs):
+        return super().step(self._get_action(action), *args, **kwargs)
     
     def reset(self, visualize=False, goal_pose=None):
         if goal_pose is not None:

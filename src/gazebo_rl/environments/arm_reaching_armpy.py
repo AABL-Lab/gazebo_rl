@@ -102,7 +102,7 @@ class ArmReacher(gym.Env):
         """
         raise NotImplementedError
 
-    def step(self, action):
+    def step(self, action, velocity_control=False):
         self.current_step += 1
         # if not len(action) == self.n_actions:
         #     raise ValueError("Action must have length {}".format(self.n_actions))
@@ -137,10 +137,12 @@ class ArmReacher(gym.Env):
                     self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
                     rospy.sleep(self.action_duration)
                 else:
-                    print(action)
-                    self.arm.goto_cartesian_pose_old(action, relative=True, radians=True)
-                    rospy.sleep(self.action_duration)
-                    # self.arm.stop_arm()
+                    if velocity_control:
+                        self.arm.cartesian_velocity_command(action, duration=self.action_duration, radians=True)
+                    else:
+                        self.arm.goto_cartesian_pose_old(action, relative=True, radians=True)
+                        rospy.sleep(self.action_duration)
+                        # self.arm.stop_arm()
             else:
                 if self.relative_commands:
                     self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
