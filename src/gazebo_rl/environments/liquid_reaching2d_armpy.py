@@ -102,6 +102,31 @@ class LiquidReacher2D(ArmReacher):
                 rew = -dist
                 return -dist, False
         
+    def _get_reward_simplified(self, observation, action):
+        """
+            for study, get reward without any penalties, based on distance from goal
+        """
+        current_pose = observation[:2]
+        wrist_pose = observation[2]
+        goal_pose = observation[-2:]
+        dist = np.linalg.norm(current_pose - goal_pose)
+        # print("dist: ", dist)
+        # print("goal_pose: ", goal_pose)
+        # print("current_pose: ", current_pose)
+        # print("wrist_pose: ", wrist_pose)
+        rew = 0
+        if dist < self.success_threshold:
+            rew = 100
+            # set a new goal pose
+            self.goal_pose = [np.random.uniform(self.workspace_limits[0], self.workspace_limits[1]),
+                                np.random.uniform(self.workspace_limits[2], self.workspace_limits[3])]
+            return rew, False
+        if self.sparse_rewards:
+            return 0, False
+        else:
+            rew = -dist
+            return -dist, False
+        
     def _get_action(self, action):
         # print("action TEST: ", action)
         if self.sim:
