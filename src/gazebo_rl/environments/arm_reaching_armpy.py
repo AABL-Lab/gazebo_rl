@@ -141,7 +141,6 @@ class ArmReacher(gym.Env):
                     rospy.sleep(self.action_duration)
                 else:
                     if velocity_control:
-                        rospy.logerr("relative cartesian commands not implemented for real robot")
                         self.arm.cartesian_velocity_command(action, duration=self.action_duration, radians=True)
                     else:
                         self.arm.goto_cartesian_pose_old(action, relative=True, radians=True, 
