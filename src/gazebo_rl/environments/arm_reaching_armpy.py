@@ -120,10 +120,8 @@ class ArmReacher(gym.Env):
             action = np.clip(np.array(action), self.min_action, self.max_action)
         else:
             original_action = copy.copy(action)
-            print("original action: ", original_action)
             action = np.clip(np.array(action), self.min_action, self.max_action)
-            action[2] = original_action[2]
-            print("action: ", action)
+            action = [action[0], action[1], 0, 0, 0, original_action[5]]
         # print("action: ", action)
         if self.sim:
             if self.cartesian_control:
