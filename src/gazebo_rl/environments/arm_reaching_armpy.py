@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import numpy as np
 import rospy 
 import time
@@ -105,7 +106,8 @@ class ArmReacher(gym.Env):
         """
         raise NotImplementedError
 
-    def step(self, action, velocity_control=False, orientation_speed=None, translation_speed=None):
+    def step(self, action, velocity_control=False, orientation_speed=None, translation_speed=None,
+             clip_wrist_action=False):
         self.current_step += 1
         # if not len(action) == self.n_actions:
         #     raise ValueError("Action must have length {}".format(self.n_actions))
@@ -114,8 +116,14 @@ class ArmReacher(gym.Env):
         #     action = self._get_action(action)
         # except:
         #     pass
-
-        action = np.clip(np.array(action), self.min_action, self.max_action)
+        if clip_wrist_action:
+            action = np.clip(np.array(action), self.min_action, self.max_action)
+        else:
+            original_action = copy.copy(action)
+            print("original action: ", original_action)
+            action = np.clip(np.array(action), self.min_action, self.max_action)
+            action[2] = original_action[2]
+            print("action: ", action)
         # print("action: ", action)
         if self.sim:
             if self.cartesian_control:
