@@ -11,12 +11,13 @@ from kortex_driver.msg import *
 import gymnasium as gym
 from gymnasium.spaces import Box
 from gym import spaces
+from sensor_msgs.msg import Image
 
 class ArmReacher(gym.Env):
     def __init__(self, max_action=.1, min_action=-.1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.1, home_arm=True, with_pixels=False, max_vel=.3, 
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="rl_observation",
-        goal_dimensions=3, max_steps=200):
+        goal_dimensions=3, max_steps=200, discrete_actions=False):
         
         """
             Generic point reaching class for the Gen3 robot.
@@ -45,7 +46,10 @@ class ArmReacher(gym.Env):
         self.min_action = min_action
         self.action_duration = action_duration
         self.n_actions = n_actions
-        self.action_space = spaces.Box(low=min_action, high=max_action, shape=(n_actions,), dtype=np.float32)
+        if discrete_actions:
+            self.action_space = spaces.Discrete(n_actions)
+        else:
+            self.action_space = spaces.Box(low=min_action, high=max_action, shape=(n_actions,), dtype=np.float32)
         self.reset_pose = reset_pose
         self.episode_time = episode_time
         self.stack_size = stack_size
@@ -58,9 +62,24 @@ class ArmReacher(gym.Env):
         self.cartesian_control = cartesian_control
         self.relative_commands = relative_commands
         self.sim = sim
-        self.observation_topic = observation_topic
+
         # observation space is the size of the observation topic
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(input_size,), dtype=np.float32)
+        self.observation_topic = observation_topic
+        self.img_obs = "_img_" in observation_topic
+        print(f"{self.observation_topic} {input_size}")
+        if self.img_obs:
+            print(str(__class__), "Using image observations")
+            self.observation_space = gym.spaces.Dict({
+                'image': gym.spaces.Box(low=0, high=255, shape=input_size, dtype=np.uint8),
+                'reward': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(), dtype=np.float32),
+                'is_first': gym.spaces.Box(low=0, high=1, shape=(), dtype=bool),
+                'is_last': gym.spaces.Box(low=0, high=1, shape=(), dtype=bool),
+                'is_terminal': gym.spaces.Box(low=0, high=1, shape=(), dtype=bool),
+            })
+        else:
+            print(str(__class__), "Using float observations")
+            self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(input_size,), dtype=np.float32)
+
         self.goal_dimensions = goal_dimensions
         self.max_steps = max_steps
         self.current_step = 0
@@ -71,8 +90,19 @@ class ArmReacher(gym.Env):
         else:
             self.workspace_limits = workspace_limits
 
-    def _get_obs(self):
-        return np.array(rospy.wait_for_message(self.observation_topic, ObsMessage).obs)
+    def _get_obs(self, is_first=False):
+        # print("waiting for observation")
+        if self.img_obs:
+            img_msg = rospy.wait_for_message(self.observation_topic, Image)
+            img_np = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
+            return {
+                "image": img_np,
+                "is_first": is_first,
+                "is_last": False, # never ends
+                "is_terminal": False # never ends
+            }
+        else:
+            return np.array(rospy.wait_for_message(self.observation_topic, ObsMessage).obs)
 
     def reset(self):
         rospy.sleep(.5)
@@ -86,7 +116,7 @@ class ArmReacher(gym.Env):
                 self.arm.goto_joint_pose_sim(self.reset_pose)
             else:
                 self.arm.goto_joint_pose(self.reset_pose)
-        return self._get_obs()
+        return self._get_obs(is_first=True)
 
     # def get_reward(self, observation):
     #     """
@@ -105,6 +135,8 @@ class ArmReacher(gym.Env):
             Applies any necessary transformations to the action 
         """
         raise NotImplementedError
+
+    # TODO: Make a discrete step version of this function. js
 
     def step(self, action, velocity_control=False, orientation_speed=None, translation_speed=None,
              clip_wrist_action=False):
