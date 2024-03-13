@@ -6,7 +6,7 @@ import numpy as np
 import rospy 
 import time
 from gen3_testing.gen3_movement_utils import Arm
-from custom_arm_reaching.msg import ObsMessage
+from gazebo_rl.msg import ObsMessage
 from kortex_driver.srv import *
 from kortex_driver.msg import *
 from gazebo_rl.environments.arm_reaching import ArmReacher
