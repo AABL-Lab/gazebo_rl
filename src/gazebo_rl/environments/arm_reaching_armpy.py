@@ -12,6 +12,7 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 from gym import spaces
 from sensor_msgs.msg import Image
+import cv2
 
 class ArmReacher(gym.Env):
     def __init__(self, max_action=.1, min_action=-.1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, episode_time=60, 
@@ -46,6 +47,7 @@ class ArmReacher(gym.Env):
         self.min_action = min_action
         self.action_duration = action_duration
         self.n_actions = n_actions
+        self.discrete_actions = discrete_actions
         if discrete_actions:
             self.action_space = spaces.Discrete(n_actions)
         else:
@@ -62,6 +64,7 @@ class ArmReacher(gym.Env):
         self.cartesian_control = cartesian_control
         self.relative_commands = relative_commands
         self.sim = sim
+        self.prev_obs = None
 
         # observation space is the size of the observation topic
         self.observation_topic = observation_topic
@@ -95,11 +98,32 @@ class ArmReacher(gym.Env):
         if self.img_obs:
             img_msg = rospy.wait_for_message(self.observation_topic, Image)
             img_np = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
+            
+            # reshape to the config size
+            width, height = img_np.shape[1], img_np.shape[0]
+            if width != height: # non square
+                if width < height:
+                    raise ValueError("Image is taller than it is wide. This is not supported.")
+                else: # images are wider than tall
+                    # crop the square image from the center
+                    img_np = img_np[:, width//2 - height//2: width//2 + height//2]
+            
+            resized_img = cv2.resize(img_np, (64, 64))
+            # flip the image vertically
+            resized_img = cv2.flip(resized_img, 0)
+            # flip the image horizontally
+            resized_img = cv2.flip(resized_img, 1)
+        
+            cv2.imshow("image", resized_img)
+            cv2.waitKey(1)
+
+            state_msg = rospy.wait_for_message("rl_observation", ObsMessage, timeout=5)
             return {
-                "image": img_np,
+                "image": resized_img,
                 "is_first": is_first,
                 "is_last": False, # never ends
-                "is_terminal": False # never ends
+                "is_terminal": False, # never ends
+                "state": np.array(state_msg.obs)
             }
         else:
             return np.array(rospy.wait_for_message(self.observation_topic, ObsMessage).obs)
@@ -116,7 +140,8 @@ class ArmReacher(gym.Env):
                 self.arm.goto_joint_pose_sim(self.reset_pose)
             else:
                 self.arm.goto_joint_pose(self.reset_pose)
-        return self._get_obs(is_first=True)
+        self.prev_obs = self._get_obs(is_first=True)
+        return self.prev_obs
 
     # def get_reward(self, observation):
     #     """
@@ -135,26 +160,37 @@ class ArmReacher(gym.Env):
             Applies any necessary transformations to the action 
         """
         raise NotImplementedError
-
-    # TODO: Make a discrete step version of this function. js
+    
+    def _map_discrete_actions(self, action):
+        """
+            Maps the discrete actions to continuous actions
+        """
+        raise NotImplementedError
 
     def step(self, action, velocity_control=False, orientation_speed=None, translation_speed=None,
              clip_wrist_action=False):
-        self.current_step += 1
-        # if not len(action) == self.n_actions:
-        #     raise ValueError("Action must have length {}".format(self.n_actions))
         
-        # try: 
-        #     action = self._get_action(action)
-        # except:
-        #     pass
+        if self.discrete_actions: action = self._map_discrete_actions(action)
+
+        self.current_step += 1
         if clip_wrist_action:
             action = np.clip(np.array(action), self.min_action, self.max_action)
         else:
             original_action = copy.copy(action)
             action = np.clip(np.array(action), self.min_action, self.max_action)
             action = [action[0], action[1], 0, 0, 0, original_action[5]]
-        # print("action: ", action)
+
+        # Do not allow an action to take us beyond the workspace limits
+        expected_new_position = self.prev_obs["state"][:2] + action[:2]
+        print(f"Current position: {self.prev_obs['state'][0]:1.2f} {self.prev_obs['state'][1]:1.2f} taking action {action[:2]}")
+        # print(f"Expected new position: {expected_new_position} from action {action[:2]}")
+        if expected_new_position[0] < self.workspace_limits[0] or expected_new_position[0] > self.workspace_limits[1]:
+            action[0] = 0
+            # print("x out of bounds. stopping.")
+        if expected_new_position[1] < self.workspace_limits[2] or expected_new_position[1] > self.workspace_limits[3]:
+            # print("y out of bounds. stopping.")
+            action[1] = 0
+
         if self.sim:
             if self.cartesian_control:
                 if not self.relative_commands:
@@ -194,7 +230,7 @@ class ArmReacher(gym.Env):
                     rospy.sleep(self.action_duration)
                     self.arm.stop_arm()
         # check if we have reached the goal
-        obs = self._get_obs()
+        obs = self.prev_obs = self._get_obs()
         reward, done = self._get_reward(obs, action)
 
         if self.current_step >= self.max_steps:

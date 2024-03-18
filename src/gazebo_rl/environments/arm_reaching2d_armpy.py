@@ -10,6 +10,13 @@ from kortex_driver.msg import *
 from gazebo_rl.environments.arm_reaching_armpy import ArmReacher
 import gymnasium as gym
 
+
+#TODO ActionMap = {
+#     0: [0, 0, 0, 0, 0, 0, 0],
+#     1: [0, 0, 0, 0, 0, 0, 1],
+#     2: [0, 0, 0, 0, 0, 0, -1],
+
+
 class ArmReacher2D(ArmReacher):
     # inherits from ArmReacher
     def __init__(self, max_action=.1, min_action=-.1, n_actions=3, action_duration=.2, reset_pose=None, episode_time=60, 
@@ -21,7 +28,6 @@ class ArmReacher2D(ArmReacher):
             stack_size=stack_size, sparse_rewards=sparse_rewards, success_threshold=success_threshold, home_arm=home_arm, with_pixels=with_pixels, max_vel=max_vel,
             cartesian_control=cartesian_control, relative_commands=relative_commands, sim=sim, workspace_limits=workspace_limits, observation_topic=observation_topic,
             goal_dimensions=goal_dimensions, discrete_actions=discrete_actions)
-        
         
         if goal_pose is None:
             if workspace_limits is None:
@@ -35,14 +41,50 @@ class ArmReacher2D(ArmReacher):
 
     def get_obs(self):
         # append the goal pose to the observation
-        obs = super()._get_obs() 
-        # obs = np.append(obs, self.goal_pose)
+        obs = super()._get_obs()
         return obs  
     
     def get_reward(self, observation):
-        return 0, False
+        # NOTE: temporary, arbitrary, goal state
+        goal_state = np.array([.5, .15])
+        # calculate the distance from the goal
+        # for k,v in observation.items():
+        #     if k == "image": print (k, v.shape)
+        #     else: print (k, v)
+
+        current_state = observation["state"][:2]
+        distance = np.linalg.norm(current_state - goal_state)
+        if distance < 0.05:
+            return 1, True
+        else:
+            return 0, False
+    
+    def _get_reward(self, observation, action=None):
+        return self.get_reward(observation)
+    
+    def _map_discrete_actions(self, action):
+        """
+            Maps the discrete actions to continuous actions
+        """
+        action_distance = ad = 0.1; had = ad/2
+        gripper, dx, dy = 0, 0, 0
+        if action == 0: dx, dy = 0, -ad
+        elif action == 1: dx, dy = had, -had
+        elif action == 2: dx, dy = ad, 0
+        elif action == 3: dx, dy = had, had
+        elif action == 4: dx, dy = 0, ad
+        elif action == 5: dx, dy = -had, had
+        elif action == 6: dx, dy = -ad, 0
+        elif action == 7: dx, dy = -had, -had
+        elif action == 8: gripper = 1
+        elif action == 9: gripper = -1 
+        else: dx, dy = 0, 0
+        return np.array([dx, dy, 0, 0, 0, 0, gripper])
         
     def get_action(self, action):
-        return np.array([action[0], action[1], 0, 0, 0, 0])
+        if self.discrete_actions:
+            return action
+        else:    
+            return np.array([action[0], action[1], 0, 0, 0, 0])
     
         
