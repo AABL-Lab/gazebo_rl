@@ -17,12 +17,16 @@ import gymnasium as gym
 #     2: [0, 0, 0, 0, 0, 0, -1],
 
 
-class ArmReacher2D(ArmReacher):
+class ArmReacher3D(ArmReacher):
     # inherits from ArmReacher
     def __init__(self, max_action=.1, min_action=-.1, n_actions=3, action_duration=.2, reset_pose=None, episode_time=60, 
         stack_size=4, sparse_rewards=False, success_threshold=.08, wrist_rotate_limit=.3,home_arm=True, with_pixels=False, max_vel=.3,
         cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, observation_topic="rl_observation",
         goal_dimensions=3, goal_pose=None, action_movement_threshold=.01,input_size=5, discrete_actions=False):
+        
+        if discrete_actions:
+            n_actions = 13 # 8 discrete planar actions, 2 discrete vertical actions, 2 discrete gripper actions
+
         ArmReacher.__init__(self, max_action=max_action, min_action=min_action, n_actions=n_actions, input_size=input_size,
             action_duration=action_duration, reset_pose=reset_pose, episode_time=episode_time,
             stack_size=stack_size, sparse_rewards=sparse_rewards, success_threshold=success_threshold, home_arm=home_arm, with_pixels=with_pixels, max_vel=max_vel,
@@ -31,10 +35,11 @@ class ArmReacher2D(ArmReacher):
         
         if goal_pose is None:
             if workspace_limits is None:
-                self.goal_pose = np.array([.5, .5])
+                self.goal_pose = np.array([.5, .5, .5])
             else:
                 self.goal_pose = [np.random.uniform(workspace_limits[0], workspace_limits[1]),
-                                  np.random.uniform(workspace_limits[2], workspace_limits[3])]
+                                  np.random.uniform(workspace_limits[2], workspace_limits[3]),
+                                  np.random.uniform(workspace_limits[4], workspace_limits[5])]
         else:
             self.goal_pose = goal_pose
         self.goal_pose = np.array(self.goal_pose)
@@ -46,7 +51,7 @@ class ArmReacher2D(ArmReacher):
     
     def get_reward(self, observation):
         # NOTE: temporary, arbitrary, goal state
-        # goal_state = np.array([0.6, -0.2]) # sim arm, upper right
+        # goal_state = np.array([0.6, -0.2]) # sim arm, upper right corner 2D
         goal_state = np.array([0.5, 0.15]) # real arm, lower left corner 2D
         # calculate the distance from the goal
         # for k,v in observation.items():
@@ -68,7 +73,7 @@ class ArmReacher2D(ArmReacher):
             Maps the discrete actions to continuous actions
         """
         action_distance = ad = 0.1; had = ad/2
-        gripper, dx, dy = 0, 0, 0
+        gripper, dx, dy, dz = 0, 0, 0, 0
         if action == 0: dx, dy = 0, -ad
         elif action == 1: dx, dy = had, -had
         elif action == 2: dx, dy = ad, 0
@@ -77,15 +82,17 @@ class ArmReacher2D(ArmReacher):
         elif action == 5: dx, dy = -had, had
         elif action == 6: dx, dy = -ad, 0
         elif action == 7: dx, dy = -had, -had
-        elif action == 8: gripper = 1
-        elif action == 9: gripper = -1 
-        else: dx, dy = 0, 0
-        return np.array([dx, dy, 0, 0, 0, 0, gripper])
+        elif action == 8: dz = 0.075 # up
+        elif action == 9: dz = -0.075 # down    
+        elif action == 10: gripper = 1
+        elif action == 11: gripper = -1 
+        else: dx, dy, dz = 0, 0, 0
+        return np.array([dx, dy, dz, 0, 0, 0, gripper])
         
     def get_action(self, action):
         if self.discrete_actions:
             return action
         else:    
-            return np.array([action[0], action[1], 0, 0, 0, 0])
+            raise NotImplementedError("Continuous actions not implemented yet")
     
         

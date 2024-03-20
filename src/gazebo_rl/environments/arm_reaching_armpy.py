@@ -89,14 +89,20 @@ class ArmReacher(gym.Env):
         self.arm = armpy.initialize("gen3")
 
         if workspace_limits is None:
-            self.workspace_limits = [.49,.8,-.5,.5,.1,.3]
+            self.workspace_limits = [.49, .95, -.5, .5, .01, .55]
         else:
             self.workspace_limits = workspace_limits
 
     def _get_obs(self, is_first=False):
         # print("waiting for observation")
         if self.img_obs:
-            img_msg = rospy.wait_for_message(self.observation_topic, Image)
+            try:
+                img_msg = rospy.wait_for_message(self.observation_topic, Image, timeout=5)
+                state_msg = rospy.wait_for_message("rl_observation", ObsMessage, timeout=5)
+            except rospy.exceptions.ROSException:
+                print("No image received")
+                return self._get_obs(is_first=is_first) #oof ugly
+            
             img_np = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
             
             # reshape to the config size
@@ -117,7 +123,6 @@ class ArmReacher(gym.Env):
             cv2.imshow("image", resized_img)
             cv2.waitKey(1)
 
-            state_msg = rospy.wait_for_message("rl_observation", ObsMessage, timeout=5)
             return {
                 "image": resized_img,
                 "is_first": is_first,
@@ -171,64 +176,76 @@ class ArmReacher(gym.Env):
              clip_wrist_action=False):
         
         if self.discrete_actions: action = self._map_discrete_actions(action)
-
         self.current_step += 1
-        if clip_wrist_action:
-            action = np.clip(np.array(action), self.min_action, self.max_action)
+
+        ## GRIPPER
+        if len(action) == 7 and action[6] != 0:
+            if action[6] == 1:
+                self.arm.open_gripper()
+            elif action[6] == -1:
+                self.arm.close_gripper()
+            rospy.sleep(self.action_duration)
         else:
-            original_action = copy.copy(action)
-            action = np.clip(np.array(action), self.min_action, self.max_action)
-            action = [action[0], action[1], 0, 0, 0, original_action[5]]
-
-        # Do not allow an action to take us beyond the workspace limits
-        expected_new_position = self.prev_obs["state"][:2] + action[:2]
-        print(f"Current position: {self.prev_obs['state'][0]:1.2f} {self.prev_obs['state'][1]:1.2f} taking action {action[:2]}")
-        # print(f"Expected new position: {expected_new_position} from action {action[:2]}")
-        if expected_new_position[0] < self.workspace_limits[0] or expected_new_position[0] > self.workspace_limits[1]:
-            action[0] = 0
-            # print("x out of bounds. stopping.")
-        if expected_new_position[1] < self.workspace_limits[2] or expected_new_position[1] > self.workspace_limits[3]:
-            # print("y out of bounds. stopping.")
-            action[1] = 0
-
-        if self.sim:
-            if self.cartesian_control:
-                if not self.relative_commands:
-                    self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                else:
-                    self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                    self.arm.stop_arm()
+            if clip_wrist_action:
+                action = np.clip(np.array(action), self.min_action, self.max_action)
             else:
-                if self.relative_commands:
-                    self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                else:
-                    self.arm.goto_joint_pose(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                    self.arm.stop_arm()
-        else:
-            if self.cartesian_control:
-                if not self.relative_commands:
-                    self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                else:
-                    if velocity_control:
-                        self.arm.cartesian_velocity_command(action, duration=self.action_duration, radians=True)
-                    else:
-                        self.arm.goto_cartesian_pose_old(action, relative=True, radians=True, 
-                                                         translation_speed=translation_speed, orientation_speed=orientation_speed)
+                original_action = copy.copy(action)
+                action = np.clip(np.array(action), self.min_action, self.max_action)
+                action = [action[0], action[1], action[2], 0, 0, 0]
+            # Do not allow an action to take us beyond the workspace limits
+            expected_new_position = self.prev_obs["state"][:3] + action[:3]
+            prev_state_str = f"{self.prev_obs['state'][0]:1.2f} {self.prev_obs['state'][1]:1.2f} {self.prev_obs['state'][2]:1.2f}"
+            pred_state_str = f"{expected_new_position[0]:1.2f} {expected_new_position[1]:1.2f} {expected_new_position[2]:1.2f}"
+            print(f"Current position: {prev_state_str} -> {pred_state_str}", end=" ")
+            print(f"from action {action[:3]}")
+            if expected_new_position[0] < self.workspace_limits[0] or expected_new_position[0] > self.workspace_limits[1]:
+                action[0] = 0
+                # print("x out of bounds. stopping.")
+            if expected_new_position[1] < self.workspace_limits[2] or expected_new_position[1] > self.workspace_limits[3]:
+                # print("y out of bounds. stopping.")
+                action[1] = 0
+            if expected_new_position[2] < self.workspace_limits[4] or expected_new_position[2] > self.workspace_limits[5]:
+                # print("z out of bounds. stopping.")
+                action[2] = 0
+
+            if self.sim:
+                if self.cartesian_control:
+                    if not self.relative_commands:
+                        self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
                         rospy.sleep(self.action_duration)
-                        # self.arm.stop_arm()
-            else:
-                if self.relative_commands:
-                    self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
+                    else:
+                        self.arm.goto_cartesian_relative_sim(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                        self.arm.stop_arm()
                 else:
-                    self.arm.goto_joint_pose(action, speed=self.max_vel)
-                    rospy.sleep(self.action_duration)
-                    self.arm.stop_arm()
+                    if self.relative_commands:
+                        self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                    else:
+                        self.arm.goto_joint_pose(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                        self.arm.stop_arm()
+            else:
+                if self.cartesian_control:
+                    if not self.relative_commands:
+                        self.arm.goto_cartesian_pose_sim(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                    else:
+                        if velocity_control:
+                            self.arm.cartesian_velocity_command(action, duration=self.action_duration, radians=True)
+                        else:
+                            self.arm.goto_cartesian_pose_old(action, relative=True, radians=True, 
+                                                            translation_speed=translation_speed, orientation_speed=orientation_speed)
+                            rospy.sleep(self.action_duration)
+                            # self.arm.stop_arm()
+                else:
+                    if self.relative_commands:
+                        self.arm.goto_joint_pose_sim(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                    else:
+                        self.arm.goto_joint_pose(action, speed=self.max_vel)
+                        rospy.sleep(self.action_duration)
+                        self.arm.stop_arm()
         # check if we have reached the goal
         obs = self.prev_obs = self._get_obs()
         reward, done = self._get_reward(obs, action)
