@@ -52,18 +52,17 @@ class ArmReacher3D(ArmReacher):
     def get_reward(self, observation):
         # NOTE: temporary, arbitrary, goal state
         # goal_state = np.array([0.6, -0.2]) # sim arm, upper right corner 2D
-        goal_state = np.array([0.5, 0.15]) # real arm, lower left corner 2D
-        # calculate the distance from the goal
-        # for k,v in observation.items():
-        #     if k == "image": print (k, v.shape)
-        #     else: print (k, v)
+        # goal_state = np.array([0.5, 0.15]) # real arm, lower left corner 2D
+        # current_state = observation["state"][:2]
+        # distance = np.linalg.norm(current_state - goal_state)
+        # if distance < 0.05:
+        #     return 1, True
+        # else:
+        #     return 0, False
 
-        current_state = observation["state"][:2]
-        distance = np.linalg.norm(current_state - goal_state)
-        if distance < 0.05:
-            return 1, True
-        else:
-            return 0, False
+        # using the presence of red color as the goal state
+        state_reward = observation["state"][-1]
+        return state_reward, state_reward == 1
     
     def _get_reward(self, observation, action=None):
         return self.get_reward(observation)
@@ -72,7 +71,7 @@ class ArmReacher3D(ArmReacher):
         """
             Maps the discrete actions to continuous actions
         """
-        action_distance = ad = 0.1; had = ad/2
+        action_distance = ad = 0.025; had = ad # NOTE: half action on diagonal
         gripper, dx, dy, dz = 0, 0, 0, 0
         if action == 0: dx, dy = 0, -ad
         elif action == 1: dx, dy = had, -had
@@ -86,7 +85,7 @@ class ArmReacher3D(ArmReacher):
         elif action == 9: dz = -0.075 # down    
         elif action == 10: gripper = 1
         elif action == 11: gripper = -1 
-        else: dx, dy, dz = 0, 0, 0
+        else: dx, dy, dz, gripper = 0, 0, 0, 0
         return np.array([dx, dy, dz, 0, 0, 0, gripper])
         
     def get_action(self, action):
