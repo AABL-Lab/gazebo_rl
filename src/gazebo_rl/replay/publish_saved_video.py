@@ -205,7 +205,7 @@ class BagVideoPublisher():
         top_index = rospy.get_param('top_index', '4'); bottom_index = rospy.get_param('bottom_index', '0')
         # image_w = None; image_h = None
         
-        frame_t0 = -1; last_joy_time = None
+        frame_t0 = -1; last_joy_time = None; all_joy_dts = []
         for topic, msg, t in bag.read_messages():
             tsec = t.to_sec()
             if t0 is None: # first message 
@@ -224,11 +224,15 @@ class BagVideoPublisher():
             if 'cartesian' in topic:
                 if stop_arm: continue
             elif 'joy' in topic:
-                # if last_joy_time is not None:
-                #     print(f"Joy time: {t.to_sec() - last_joy_time.to_sec()}")
-                #     last_joy_time = t
-                # else: 
-                #     last_joy_time = t
+                if last_joy_time is not None:
+                    joy_dt = t.to_sec() - last_joy_time.to_sec()
+                    print(f"Joy time: {joy_dt:1.2f} {msg.axes} {msg.buttons}")
+                    if (np.sum(msg.axes) > 0.01 or np.sum(msg.buttons) > 0.01) and joy_dt > 0.02:
+                        time.sleep(5)
+                    all_joy_dts.append(joy_dt)
+                    last_joy_time = t
+                else: 
+                    last_joy_time = t
 
                 if args.no_arm:
                     pass
@@ -294,6 +298,12 @@ class BagVideoPublisher():
             rospy.logdebug(f'{tsec:1.2f} {sleeptime:1.3f} {topic}')
 
         print(f"Published {pnum} frames.")
+
+        # histogram of joy times
+        if len(all_joy_dts) > 0:
+            import matplotlib.pyplot as plt
+            plt.hist(all_joy_dts, bins=100)
+            plt.show()
 
 
 if __name__ == '__main__':
