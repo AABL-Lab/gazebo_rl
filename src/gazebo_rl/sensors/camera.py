@@ -124,17 +124,22 @@ class Camera():
                         # reward = find_and_draw_circles_and_detect_reward(img)
 
                         reward = 0.0
-                        reward_pub.publish(reward)
+                        # reward_pub.publish(reward)
 
                         # crop from the left, no offset for BOTTOM image
                         img = img[:self.crop_dim, -self.crop_dim:]
                         # cv2.putText(img, f"Reward: 0.0", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA) # legacy from dataset. TODO: remove and reaggregate dataset
+
+                cv2.imshow(f'{str(self.camera.port)} {img.shape}', img); cv2.waitKey(10)
 
                 resized_image = cv2.resize(img, (96, 96), interpolation=cv2.INTER_LINEAR)
                 # resized_image = img
                 
                 # conver to grayscale
                 if GRAYSCALE:=True:
+                    # print the min and max of the image
+                    # print(f"min: {np.min(resized_image)}, max: {np.max(resized_image)}")
+
                     gray_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
                     # puclish the image
                     img_msg = bridge.cv2_to_imgmsg(gray_image, encoding='mono8')

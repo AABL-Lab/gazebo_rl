@@ -59,7 +59,7 @@ def img_cb(data):
         current_image = np.expand_dims(current_image, axis=-1)
 
         # Expects a 0 - 1 range
-        current_image = current_image / 255.0
+        current_image = current_image
 
         # cv2.imshow("image", current_image)
         # cv2.waitKey(1)
@@ -79,7 +79,7 @@ def side_img_cb(data):
         # add the grayscale channel
         current_side_image = np.expand_dims(current_side_image, axis=-1)
 
-        current_side_image = current_side_image / 255.0
+        current_side_image = current_side_image
         # cv2.imshow("side_image", current_side_image)
         # cv2.waitKey(1)
 
@@ -102,10 +102,11 @@ def eef_pose(msg):
         eef_time = time.time()
         current_observation = np.array([*tool_pose, *tool_v, gripper_pos], dtype=np.float32)
 
-current_reward = 0
+current_reward = -1.0
 def reward_cb(msg):
     global current_reward
     current_reward = msg.data
+    print(f'REWARD: {current_reward}')
 
 def sync_copy_eef():
     with eef_lock:
@@ -212,7 +213,7 @@ class BasicArm(gym.Env):
         # action -> shape=(7,), dtype=float32
         # Typically you'll bound velocity inputs in [-1,1] or something similar
         self.action_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(7,), dtype=np.float32
+            low=-1.0, high=1.0, shape=(5,), dtype=np.float32
         )
 
         self._episode_steps = 0
@@ -281,23 +282,28 @@ class BasicArm(gym.Env):
                 "state": self.observation_space['state'].sample(),
                 "image_top": np.zeros((*self.config.size, self.n_img_ch), dtype=np.uint8),
                 "image_bottom": np.zeros((*self.config.size, self.n_img_ch), dtype=np.uint8),
-                'reward': 0.0,
-                'is_first': 1,
+                'reward': -1.0,
+                'is_first': is_first,
                 'is_last': 0,
                 'is_terminal': 0,
                 }
         
 
         reward = current_reward
+        if reward > 0:
+            is_last = True; is_terminal = True
+        else:
+            is_last = False; is_terminal = False
+
 
         return {
             "state": state,
             "image_top": top_img,
             "image_bottom": bot_img,
             'reward': reward,
-            'is_first': 1,
-            'is_last': 0,
-            'is_terminal': 0,
+            'is_first': is_first,
+            'is_last': is_last,
+            'is_terminal': is_terminal,
             }
     
 
@@ -348,6 +354,11 @@ class BasicArm(gym.Env):
                 print("Unexpected exception in stopping arm", e)
                     
 
+        while current_reward > -1.:
+            print(f"REWARD IS NONZERO, RESET PUBLISHER!")
+            rospy.sleep(2.0)
+
+
         obs = self._get_obs(is_first=True)
         self.start_time = time.time()
         return obs
@@ -362,23 +373,17 @@ class BasicArm(gym.Env):
 
         self.current_step += 1
 
-        gripper = action[6]
-        action = np.clip(np.array(action), self.min_action, self.max_action)
-        action[6] = gripper
-
         # NOTE: temporary mapping to align with config
         # Is this the same as for DfD as it was for lerobot?
         # action = [action[0], action[1], action[2], 0, action[5], 0, action[6]]
-        action = [action[1], action[0], action[2], 0, action[5], 0, action[6]]
-
-        self.action_pub.publish(Float32MultiArray(data=action))
-        # action = [.05, -0.05, *action[2:]]
-        # action = list(action); action[3] = 0.; action[5] = 0.
+        
+        # scale the first three action dimensions between minimum action and the max action. [-1,1] * max_action = [-max_action, max_action]
+        action = [action[0] * 0.1222, action[1] * 0.1222, action[2] * 0.1222, 0., action[3], 0., action[4]]
 
         if self.velocity_control:
             # clip all but the last action idx
             action = [np.clip(a, -VELOCITY_CAP, VELOCITY_CAP) for a in action[:3]] + action[3:]
-            buffered_move_xyz = [1.5 * (a * self.action_duration) for a in action[:3]]
+            buffered_move_xyz = [1.0 * (a * self.action_duration) for a in action[:3]]
             prev_xyz = self.prev_eef[:3]
             expected_new_position = newx, newy, newz = [prev_p + dp for prev_p, dp in zip(prev_xyz, buffered_move_xyz)]
         else: expected_new_position = newx, newy, newz = self.prev_eef[:3] + action[:3] # Do not allow an action to take us beyond the workspace limits
@@ -388,15 +393,15 @@ class BasicArm(gym.Env):
         # print(f"{self.current_step:4d} dp: {prev_state_str} -> {pred_state_str} from action {action[:3]}")
 
         ### DON"T FLIP THE SHELF
-        if (newz >= 0.1 and action[2] > 0) and newx >= 0.53:
-            print("z > 0.1 and x > 0.53. stopping.")
-            action[2] = 0
-        elif (newz <= 0.1) and (newx >= 0.51 and action[0] > 0):
-            print("z > 0.1 and x > 0.53. stopping.")
-            action[0] = 0
-        elif (newz <= 0.12 and action[2] < 0) and newx >= 0.53:
-            print("z < 0.12 and x > 0.53. stopping.")
-            action[2] = 0
+        # if (newz >= 0.1 and action[2] > 0) and newx >= 0.53:
+        #     print("z > 0.1 and x > 0.53. stopping.")
+        #     action[2] = 0
+        # elif (newz <= 0.1) and (newx >= 0.51 and action[0] > 0):
+        #     print("z > 0.1 and x > 0.53. stopping.")
+        #     action[0] = 0
+        # elif (newz <= 0.12 and action[2] < 0) and newx >= 0.53:
+        #     print("z < 0.12 and x > 0.53. stopping.")
+        #     action[2] = 0
         ####
 
         if (newz <= 0.015 and action[2] < 0) or (newz >= 0.6 and action[2] > 0):
@@ -408,7 +413,7 @@ class BasicArm(gym.Env):
 
         # for newd, d in zip([newx, newy, newz], action[:3]):
         #     print(f"{newd:+1.2f} {d:+1.2f} || ", end=' ')
-        print(f'{ 1 / (time.time() - self.last_step_time):1.2f} HZ')
+        # print(f'{ 1 / (time.time() - self.last_step_time):1.2f} HZ')
         self.last_step_time = time.time()
 
         FAULT = False
@@ -451,20 +456,31 @@ class BasicArm(gym.Env):
 
                         try:
                             gripper = False
-                            if abs(action[6]) > 0.9:
-                                gripper = True
+                            if abs(action[6]) > 0.8:
                                 if action[6] > 0:
                                     print(f"    CLOSE GRIPPER")
-                                    self.arm.close_gripper(block=False)
-                                    # rospy.sleep(0.5)
+                                    self.arm.send_gripper_command(-1., mode = 'speed', duration = 200, relative=True, block=False)
                                 else:
                                     print(f"    OPEN GRIPPER")
-                                    self.arm.open_gripper(block=False)
+                                    self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)
+                            else:
+                                self.arm.send_gripper_command(0.0, mode = 'speed', duration = 200, relative=True, block=False)
+                                    
+
+
+                            #     gripper = True
+                            #     if action[6] > 0:
+                            #         print(f"    CLOSE GRIPPER")
+                            #         self.arm.close_gripper(block=False)
+                            #         # rospy.sleep(0.5)
+                            #     else:
+                            #         print(f"    OPEN GRIPPER")
+                            #         self.arm.open_gripper(block=False)
                                     # rospy.sleep(0.5)
 
+                            print(', '.join([f"{a:+1.2f}" for a in action]))
                             self.arm.cartesian_velocity_command(action[:6], duration=self.action_duration, radians=True, block=False)
                             # if not gripper:
-                            # self.arm.send_gripper_command(action[-1], mode = 'speed', duration = 200, relative=True, block=False)
                         except Exception as e:
                             print("Error in velocity command", e)
                             print(f"Returning done for a reset")
@@ -496,7 +512,9 @@ class BasicArm(gym.Env):
         # rospy.sleep(1 / 30.) # 30 Hz
 
         # sleep for the rest of the time
-        rospy.sleep(self.action_duration - (time.time() - step_start_time))
+        rospy.sleep((self.action_duration) - (time.time() - step_start_time)) # for random agent
+        # rospy.sleep((self.action_duration - 0.01) - (time.time() - step_start_time)) # for real model training
+
 
         if FAULT:
             obs['is_last'] = True
