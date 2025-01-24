@@ -18,6 +18,7 @@ from sensor_msgs.msg import Image
 from gazebo_rl.sensors.reward_check import find_and_draw_circles_and_detect_reward
 from std_msgs.msg import Float32, Float32MultiArray
 import matplotlib.pyplot as plt
+from gazebo_rl.replay.live_replay import draw_partial_circle
 
 zero = lambda x: (x[0] + x[1]) / 2
 nrange = lambda x: x[1] - x[0]
@@ -59,7 +60,11 @@ def img_cb(data):
         current_image = np.expand_dims(current_image, axis=-1)
 
         # Expects a 0 - 1 range
-        current_image = current_image
+        circle_r = 15
+        circle_midpoint = (circle_r, cv_image.shape[0] - circle_r)
+        cv_image = draw_partial_circle(cv_image, circle_midpoint, circle_r, current_image[2] / 0.6, (255, 0, 0), -1)
+
+        draw_partial_circle(current_image, (48, 48), 48, 0.5, (255, 0, 0), 2)
 
         # cv2.imshow("image", current_image)
         # cv2.waitKey(1)

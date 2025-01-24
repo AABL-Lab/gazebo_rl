@@ -16,7 +16,7 @@ def action_callback(msg):
     short_moving_avg.append(msg.data)
     long_moving_avg.append(msg.data)
 
-state = [0, 0, 0]
+state = [0, 0, 0.4]
 def state_callback(msg):
     global state
     tool_pose = msg.base.tool_pose_x, msg.base.tool_pose_y, msg.base.tool_pose_z
@@ -66,17 +66,18 @@ def draw_partial_circle(
         thickness=thickness
     )
 
+bridge = CvBridge()
 def callback(data, title):
-    bridge = CvBridge()
     try:
-        cv_image = bridge.imgmsg_to_cv2(data, "bgr8")
+        cv_image = bridge.imgmsg_to_cv2(data) #, "bgr8")
     except CvBridgeError as e:
         rospy.logerr(e)
 
     # upscale the image
-    cv_image = cv2.resize(cv_image, (0,0), fx=5, fy=5)
+    # cv_image = cv2.resize(cv_image, (0,0), fx=5, fy=5)
 
-    # print(f'{title} {cv_image.shape}')
+
+    print(f'{title} {cv_image.shape}')
     midpoint = (cv_image.shape[1] // 2, cv_image.shape[0] // 2)
     # draw an arrow on the image corresponding to the long moving average of the first two dimensions
     if len(long_moving_avg) > 0:
@@ -91,9 +92,9 @@ def callback(data, title):
 
     # draw a circle partially filled in based on the third dimension of state
     # put it in the lower left corner
-    circle_r = 50
-    circle_midpoint = (circle_r, cv_image.shape[0] - circle_r)
-    cv_image = draw_partial_circle(cv_image, circle_midpoint, circle_r, state[2] / 0.6, (255, 0, 0), -1)
+    # circle_r = 50
+    # circle_midpoint = (circle_r, cv_image.shape[0] - circle_r)
+    # cv_image = draw_partial_circle(cv_image, circle_midpoint, circle_r, state[2] / 0.6, (255, 0, 0), -1)
 
     # Process the image (e.g., apply filters, detect objects)
     cv2.imshow(f'{title} {cv_image.shape}', cv_image)
@@ -104,6 +105,7 @@ def callback(data, title):
 def main():
     rospy.init_node('image_subscriber', anonymous=True)
     cv2.startWindowThread()
+    print(f"Subscribing to {video_topics}")
     rospy.Subscriber(video_topics[0], Image, lambda x: callback(x, 'top'))
     rospy.Subscriber(video_topics[1], Image, lambda x: callback(x, 'bottom'))
     rospy.Subscriber(f"/my_gen3_lite/base_feedback", BaseCyclic_Feedback, state_callback)
