@@ -129,6 +129,45 @@ def sync_copy_side_image():
         img_np = current_side_image.copy()
     return img_np
 
+
+def draw_partial_circle(
+    image,
+    center,
+    radius,
+    fullness,
+    color,
+    thickness
+):
+    """
+    Draws a partially filled circle (pie-slice) on the given image.
+
+    :param image: The OpenCV image (numpy array) on which to draw.
+    :param center: (x, y) center of the circle.
+    :param radius: Radius of the circle.
+    :param fullness: A float in [0.0, 1.0] indicating how full the circle should be.
+                     0.0 = not filled, 1.0 = completely filled.
+    :param color: A tuple (B, G, R) color for the fill/outline.
+    :param thickness: Thickness of the shape boundary. If set to -1, it draws a filled pie-slice.
+
+    ## RSSNOTE: This function is dupliccated in gazebo_rl/environments/basic_arm_gym.py If you change this, change that too!!
+    """
+    # Ensure fullness is clamped between 0 and 1
+    fullness_clamped = max(0.0, min(fullness, 1.0))
+
+    # Convert fullness to degrees (0 - 360)
+    end_angle_deg = int(360 * fullness_clamped)
+
+    return cv2.ellipse(
+        image,
+        center=center,
+        axes=(radius, radius),  # same radius in x and y → circle
+        angle=0,                # no rotation
+        startAngle=0,
+        endAngle=end_angle_deg,
+        color=color,
+        thickness=thickness
+    )
+
 class BasicArm(gym.Env):
     def __init__(self, max_action=.1, min_action=-.1, n_actions=2, input_size=4, action_duration=.5, reset_pose=None, velocity_control=False,
         stack_size=4, home_arm=True, max_vel=.3, cartesian_control=True, relative_commands=True, sim=True, workspace_limits=None, discrete_actions=False, robot_name='gen3', config=None):
@@ -224,7 +263,7 @@ class BasicArm(gym.Env):
         self._episode_steps = 0
 
         self.last_step_time = time.time()
-
+        
         self.crop_dim = 700
         self.crop_left_offset = 200
         self.config = config
@@ -232,6 +271,8 @@ class BasicArm(gym.Env):
         self.start_time = time.time()
         fig, ax = plt.subplots(1, 2)
         self.fig = fig; self.ax = ax
+
+        self.add_circle_for_height = True
 
     def _base_feedback_callback(self, msg: BaseCyclic_Feedback):
         '''
@@ -299,6 +340,12 @@ class BasicArm(gym.Env):
             is_last = True; is_terminal = True
         else:
             is_last = False; is_terminal = False
+
+        if self.add_circle_for_height:
+            z_value = max(state[2], 0) # make sure it's positive
+            circle_r = int(np.ceil(top_img.shape[0] * 0.1))
+            circle_midpoint = (circle_r, top_img.shape[0] - circle_r)
+            top_img = draw_partial_circle(top_img, circle_midpoint, circle_r, z_value / 0.6, (255, 0, 0), -1)
 
 
         return {
