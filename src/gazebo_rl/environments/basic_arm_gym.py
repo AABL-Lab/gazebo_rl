@@ -92,7 +92,7 @@ def side_img_cb(data):
         if dt > 5: print(f"WARN: side image time: {dt} seconds.")
         side_image_time = time.time()
 
-current_observation = np.zeros(13)    
+current_observation = np.zeros(4)    
 eef_lock = threading.Lock()
 eef_time = time.time()
 def eef_pose(msg):
@@ -105,7 +105,8 @@ def eef_pose(msg):
         dt = time.time() - eef_time
         if dt > 5: print(f"WARN: EEF time: {dt} seconds.")
         eef_time = time.time()
-        current_observation = np.array([*tool_pose, *tool_v, gripper_pos], dtype=np.float32)
+        # current_observation = np.array([*tool_pose, *tool_v, gripper_pos], dtype=np.float32)
+        current_observation = np.array([*tool_pose, gripper_pos], dtype=np.float32)
 
 current_reward = -1.0
 def reward_cb(msg):
@@ -239,7 +240,7 @@ class BasicArm(gym.Env):
         self.n_img_ch = 1 if config.grayscale else 3
         self.observation_space = spaces.Dict({
             "state": spaces.Box(
-                low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32
+                low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
             ),
             "image_top": spaces.Box(
                 low=0, high=255, shape=(*config.size, self.n_img_ch), dtype=np.uint8
