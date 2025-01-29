@@ -14,7 +14,7 @@ from collections import defaultdict, deque
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, JointState
 from gazebo_rl.sensors.reward_check import find_and_draw_circles_and_detect_reward
 from std_msgs.msg import Float32, Float32MultiArray
 import matplotlib.pyplot as plt
@@ -32,7 +32,6 @@ VELOCITY_CAP = 0.11
 
 import logging
 import threading
-from sensor_msgs.msg import JointState
 
 from cv_bridge import CvBridge
 import cv2
@@ -40,12 +39,6 @@ import cv2
 # cv2.startWindowThread()
 
 cv_bridge = CvBridge()
-
-global joint_state
-joint_state = None
-def joint_state_callback(msg):
-    global joint_state
-    joint_state = msg
 
 image_lock = threading.Lock()
 current_image = np.zeros((96, 96, 1), dtype=np.uint8)
@@ -108,11 +101,23 @@ def eef_pose(msg):
         # current_observation = np.array([*tool_pose, *tool_v, gripper_pos], dtype=np.float32)
         current_observation = np.array([*tool_pose, gripper_pos], dtype=np.float32)
 
+joints = np.zeros(7)
+joint_lock = threading.Lock()
+def joint_state_callback(msg):
+    with joint_lock:
+        global joints
+        joints = msg.position
+
 current_reward = -1.0
 def reward_cb(msg):
     global current_reward
     current_reward = msg.data
     print(f'REWARD: {current_reward}')
+
+def sync_copy_joints():
+    with joint_lock:
+        global joints
+        return joints.copy()
 
 def sync_copy_eef():
     with eef_lock:
@@ -215,9 +220,9 @@ class BasicArm(gym.Env):
             self.workspace_limits = workspace_limits
 
         rospy.Subscriber(f"/{robot_name}/base_feedback", BaseCyclic_Feedback, eef_pose)
+        rospy.Subscriber(f"/{robot_name}/base_feedback/joint_state", JointState, joint_state_callback)
         rospy.Subscriber(f"/camera_obs__dev_video4_96x96", Image, img_cb)
         rospy.Subscriber(f"/camera_obs__dev_video0_96x96", Image, side_img_cb)
-        rospy.Subscriber('/my_gen3_lite/base_feedback/joint_state', JointState, joint_state_callback)
         rospy.Subscriber('/reward', Float32, reward_cb)
         self.action_pub = rospy.Publisher('action', Float32MultiArray, queue_size=10)
         self.SAFETY_MODE = False
@@ -241,6 +246,9 @@ class BasicArm(gym.Env):
         self.observation_space = spaces.Dict({
             "state": spaces.Box(
                 low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+            ),
+            "joints": spaces.Box(
+                low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
             ),
             "image_top": spaces.Box(
                 low=0, high=255, shape=(*config.size, self.n_img_ch), dtype=np.uint8
@@ -320,6 +328,7 @@ class BasicArm(gym.Env):
             # self.ax[1].imshow(bot_img)
             # plt.show()
 
+            joints = sync_copy_joints()
             state = sync_copy_eef()
             self.prev_eef = state
         except Exception as e:
@@ -327,6 +336,7 @@ class BasicArm(gym.Env):
             # return self._get_obs(is_first=is_first) #oof ugly
             return {
                 "state": self.observation_space['state'].sample(),
+                "joints": self.observation_space['joints'].sample(),
                 "image_top": np.zeros((*self.config.size, self.n_img_ch), dtype=np.uint8),
                 "image_bottom": np.zeros((*self.config.size, self.n_img_ch), dtype=np.uint8),
                 'reward': -1.0,
@@ -351,6 +361,7 @@ class BasicArm(gym.Env):
 
         return {
             "state": state,
+            "joints": joints,
             "image_top": top_img,
             "image_bottom": bot_img,
             'reward': reward,
@@ -385,14 +396,14 @@ class BasicArm(gym.Env):
                         backup_position = [0.34551798719466237, -0.8454950565561763, 2.169129261535217, -1.232747441193471, 1.4586096006108726, -1.686383909690952] #, 0.5953540153613426]
                         target_joint_positions = [0.3268500269015339, -1.4471734542578538, 2.3453266624159497, -1.3502152158191212, 2.209384006676201, -1.5125125137062945] #, -0.0877648122691288]
                         
-                        if np.allclose(target_joint_positions, joint_state.position[:6], atol=0.1):
+                        if np.allclose(target_joint_positions, joints[:6], atol=0.1):
                             print("Already at reset target")
                         else:
                             # which position is the arm closest to?
-                            if np.linalg.norm(np.array(joint_state.position[:6]) - np.array(backup_position)) < np.linalg.norm(np.array(joint_state.position[:6]) - np.array(target_joint_positions)):
+                            if np.linalg.norm(np.array(joints[:6]) - np.array(backup_position)) < np.linalg.norm(np.array(joints[:6]) - np.array(target_joint_positions)):
                                 for tjp in [backup_position, target_joint_positions]:
-                                    while not np.allclose(joint_state.position[:6], tjp, atol=0.1):
-                                        print(f"\tMoving to {tjp}. Distance from target {np.linalg.norm(np.array(joint_state.position[:6]) - np.array(tjp))}")
+                                    while not np.allclose(joints[:6], tjp, atol=0.1):
+                                        print(f"\tMoving to {tjp}. Distance from target {np.linalg.norm(np.array(joints[:6]) - np.array(tjp))}")
                                         self.arm.goto_joint_pose(tjp, radians=True, block=False)
                                         rospy.sleep(4.0)
                             else:
@@ -515,10 +526,7 @@ class BasicArm(gym.Env):
                                     self.arm.send_gripper_command(-1., mode = 'speed', duration = 200, relative=True, block=False)
                                 else:
                                     print(f"    OPEN GRIPPER")
-                                    self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)
-                            else:
-                                self.arm.send_gripper_command(0.0, mode = 'speed', duration = 200, relative=True, block=False)
-                                    
+                                    self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)                                    
 
 
                             #     gripper = True
