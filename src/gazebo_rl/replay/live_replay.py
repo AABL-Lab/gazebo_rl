@@ -47,14 +47,6 @@ def draw_partial_circle(
     # Convert fullness to degrees (0 - 360)
     end_angle_deg = int(360 * fullness_clamped)
 
-    # cv2.ellipse parameters:
-    #   - center: (x, y)
-    #   - axes: (radius_x, radius_y)
-    #   - angle of rotation of the ellipse (in degrees)
-    #   - startAngle: where arc starts (in degrees)
-    #   - endAngle: where arc ends (in degrees)
-    #   - color: (B, G, R)
-    #   - thickness: -1 for filled, > 0 for outline thickness
     return cv2.ellipse(
         image,
         center=center,
@@ -73,11 +65,13 @@ def callback(data, title):
     except CvBridgeError as e:
         rospy.logerr(e)
 
+
+
     # upscale the image
     # cv_image = cv2.resize(cv_image, (0,0), fx=5, fy=5)
 
 
-    print(f'{title} {cv_image.shape}')
+    # print(f'{title} {cv_image.shape}')
     midpoint = (cv_image.shape[1] // 2, cv_image.shape[0] // 2)
     # draw an arrow on the image corresponding to the long moving average of the first two dimensions
     if len(long_moving_avg) > 0:

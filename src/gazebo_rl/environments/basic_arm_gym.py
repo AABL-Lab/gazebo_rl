@@ -96,7 +96,7 @@ joint_lock = threading.Lock()
 def joint_state_callback(msg):
     with joint_lock:
         global joints
-        joints = msg.position
+        joints = np.array(msg.position)
 
 current_reward = -1.0
 def reward_cb(msg):
@@ -111,6 +111,7 @@ def sync_copy_joints():
 
 def sync_copy_eef():
     with eef_lock:
+        global current_observation
         return current_observation.copy()
 
 def sync_copy_image():
@@ -458,11 +459,11 @@ class BasicArm(gym.Env):
         ####
 
         if (newz <= 0.015 and action[2] < 0) or (newz >= 0.6 and action[2] > 0):
-            action[2] = 0; print("z out of bounds. stopping.")
+            action[2] = 0; # print("z out of bounds. stopping.")
         if (newx <= 0.3 and action[0] < 0) or (newx >= 0.8 and action[0] > 0):
-            action[0] = 0; print("x out of bounds. stopping.")
+            action[0] = 0; # print("x out of bounds. stopping.")
         if (newy <= -0.25 and action[1] < 0) or (newy >= 0.25 and action[1] > 0):
-            action[1] = 0; print("y out of bounds. stopping.")
+            action[1] = 0; # print("y out of bounds. stopping.")
 
         # for newd, d in zip([newx, newy, newz], action[:3]):
         #     print(f"{newd:+1.2f} {d:+1.2f} || ", end=' ')
@@ -511,10 +512,10 @@ class BasicArm(gym.Env):
                             gripper = False
                             if abs(action[6]) > 0.8:
                                 if action[6] > 0:
-                                    print(f"    CLOSE GRIPPER")
+                                    # print(f"    CLOSE GRIPPER")
                                     self.arm.send_gripper_command(-1., mode = 'speed', duration = 200, relative=True, block=False)
                                 else:
-                                    print(f"    OPEN GRIPPER")
+                                    # print(f"    OPEN GRIPPER")
                                     self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)
 
                             # print(', '.join([f"{a:+1.2f}" for a in action]))
@@ -523,7 +524,6 @@ class BasicArm(gym.Env):
                         except Exception as e:
                             print("Error in velocity command", e)
                             print(f"Returning done for a reset")
-                            # rospy.sleep(10)
                             FAULT = True
                             
                     else:
@@ -551,7 +551,7 @@ class BasicArm(gym.Env):
         # rospy.sleep(1 / 30.) # 30 Hz
 
         # sleep for the rest of the time
-        rospy.sleep((self.action_duration) - (time.time() - step_start_time)) # for random agent
+        # rospy.sleep((self.action_duration) - (time.time() - step_start_time)) # for random agent
         # rospy.sleep((self.action_duration - 0.01) - (time.time() - step_start_time)) # for real model training
 
 

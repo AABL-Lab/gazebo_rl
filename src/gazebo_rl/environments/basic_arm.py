@@ -147,7 +147,8 @@ class BasicArm():
                 self.arm.goto_joint_pose_sim(self.reset_pose)
             else:
                 # first go up to avoid collisions
-                self.arm.goto_cartesian_pose_old([-0.1, -0.15, 0.05, 0, 0, 0], relative=True, radians=True)
+                target_joint_positions = [0.3268500269015339, -1.4471734542578538, 2.3453266624159497, -1.3502152158191212, 2.209384006676201, -1.5125125137062945] #, -0.0877648122691288]
+                self.arm.goto_cartesian_pose_old(target_joint_positions, relative=True, radians=True)
                 rospy.sleep(0.5)
                 self.arm.goto_joint_pose(self.reset_pose)
             rospy.sleep(1)
@@ -187,12 +188,8 @@ class BasicArm():
 
         # Dont' normalize the gripper command (dimension 6)
         
-        gripper = action[6]
-        action = np.clip(np.array(action), self.min_action, self.max_action)
-        action[6] = gripper
-
         # NOTE: temporary mapping to align with config
-        action = [action[1], action[0], action[2], 0, action[5], 0, action[6]]
+        action = [action[0] * 0.1222, action[1] * 0.1222, action[2] * 0.1222, 0., action[3], 0., action[4]]
         
         if self.velocity_control:
             # clip all but the last action idx
@@ -250,23 +247,26 @@ class BasicArm():
                     rospy.sleep(self.action_duration)
                 else:
                     if self.velocity_control:
-                        # if abs(action[6]) > 0.3:
-                        #     gripper_dir = 1 if action[6] > 0 else -1 
-                        #     self.arm.send_gripper_command(gripper_dir*1, mode = 'speed', duration = 200, relative=True, block=False)
-                        if abs(action[6]) > 0.9:
+                        # if abs(action[6]) > 0.8:
+                        #     if action[6] > 0:
+                        #         print(f"    CLOSE GRIPPER")
+                        #         self.arm.close_gripper(block=False)
+                        #         rospy.sleep(0.5)
+                        #     else:
+                        #         print(f"    OPEN GRIPPER")
+                        #         self.arm.open_gripper(block=False)
+                        #         rospy.sleep(0.5)
+
+
+                        if abs(action[6]) > 0.8:
                             if action[6] > 0:
                                 print(f"    CLOSE GRIPPER")
-                                self.arm.close_gripper(block=False)
-                                rospy.sleep(0.5)
+                                self.arm.send_gripper_command(-1., mode = 'speed', duration = 200, relative=True, block=False)
                             else:
                                 print(f"    OPEN GRIPPER")
-                                self.arm.open_gripper(block=False)
-                                rospy.sleep(0.5)
-                        # elif abs(action[6]) > 0.01:
-                            # print(f"    Gripper action {action[6]:1.2f}")
-                            # self.arm.send_gripper_command(action[6], mode = 'speed', duration = 200, relative=True, block=False)
-                            # rospy.sleep(0.1)
-                        # action = [0, 0, 0, 0, 0, 0]
+                                self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)
+
+
                         self.arm.cartesian_velocity_command(action[:6], duration=self.action_duration, radians=True, block=False)
                     else:
                         # print("goto_cartesian_pose_old")

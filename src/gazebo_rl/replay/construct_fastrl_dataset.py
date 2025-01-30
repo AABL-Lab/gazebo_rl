@@ -14,7 +14,7 @@ import std_msgs.msg
 import armpy
 from gazebo_rl.sensors.reward_check import find_and_draw_circles_and_detect_reward
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Image as RosImage, Joy
+from sensor_msgs.msg import Image as RosImage, Joy, JointState
 from std_msgs.msg import Float32, Int8
 import IPython
 from kortex_driver.msg import BaseCyclic_Feedback
@@ -198,6 +198,7 @@ class BagVideoPublisher():
             'reward': [],
             'action': [],
             'state': [],
+            'joint_states': [],
             'is_terminal': [],
             'image_top': [],
             'image_bottom': [],
@@ -216,9 +217,12 @@ class BagVideoPublisher():
             episode['image_top'].append(fm['image_top'][0])
             episode['image_bottom'].append(fm['image_bottom'][0])
             episode['state'].append(fm['state'][0])
+            episode['joint_states'].append(fm['joint_states'][0])
 
             episode['discount'].append(0 if fm['is_last'] or fm['is_terminal'] else 1)
             episode['logprob'].append(0) # unused
+
+            # episode['frame_timestamp'].append(fm['frame_timestamp'][0])
 
             # take the mean of the action, since it's a continuous action space
             dof6 = np.mean(fm['action'], axis=0) if len(fm['action']) > 1 else fm['action'][0]
@@ -257,7 +261,7 @@ class BagVideoPublisher():
                     BREAK_DUE_TO_REWARD = True
                     frame['discount'], frame['is_last'], frame['is_terminal'] = [0.], [True], [True]
                 else:
-                    frame['discount'], frame['is_last'], frame['is_terminal'], frame['reward'] = [1.], [False], [False], [0.]
+                    frame['discount'], frame['is_last'], frame['is_terminal'], frame['reward'] = [1.], [False], [False], [-1.]
                 # add the frame to the episode
                 try:
                     add_frame_to_episode(frame)
@@ -298,6 +302,8 @@ class BagVideoPublisher():
                 dof6 = [msg.twist.linear_x, msg.twist.linear_y, msg.twist.linear_z, msg.twist.angular_x, msg.twist.angular_y, msg.twist.angular_z]
                 frame['action'].append(dof6)
                 last_dof6 = [dof6]
+            elif '__JointState' in str_type and 'base_feedback' in topic:
+                frame['joint_states'].append(list(msg.position))
             else:
                 pass
             # elif type(msg) in [Float32, Int8]:
@@ -331,7 +337,7 @@ class BagVideoPublisher():
 
                     # convert to grayscale and 96 x 96
 
-                    if args.show_video or SHOW_FIRST_FRAME or percent_complete[cidx] > args.percent_threshold:
+                    if False and (args.show_video or SHOW_FIRST_FRAME or percent_complete[cidx] > args.percent_threshold):
                         cv2.imshow(f'{UID} {CAM_POSITION=} {cframe.shape=} {crop_dim} {crop_left_offset}', cframe)
                         if percent_complete[cidx] > args.percent_threshold and len(frame['reward']) == 0:
                             print(f"Percent complete: {percent_complete[cidx]}")
@@ -388,17 +394,30 @@ class BagVideoPublisher():
                 cv2.waitKey(1 if i < len(episode['action']) - 1 else 0)
 
         # out directory
-        outdir = Path(f'~/workspace/HD_ros_46/eps/').expanduser()
+        outdir = Path(f'~/workspace/HD_ros_53/eps/').expanduser()
         outdir.mkdir(exist_ok=True, parents=True)
             
             # .dump(outdir / f'{k}.npy')
+
+        # for k,v in episode.items():
+        #     print(f"{k=}, {v.shape if isinstance(v, np.ndarray) else len(v)}", end=' ')
+        #     val = v[0]
+        #     if isinstance(val, np.ndarray):
+        #         print(f'{val.shape}')
+        #     elif hasattr(val, '__len__'):
+        #         print(f'{len(val)}')
+        #     else:
+        #         print(val)
+        # for js in episode['joint_states']:
+        #     print(len(js))
+    
         np.savez(outdir / f'{UID}.npz', **episode)
 
         # now load it back and play it back
-        loaded_ep = None
-        with np.load(outdir / f'{UID}.npz') as ep:
-            loaded_ep = {k: ep[k] for k in ep.keys()}
-        playback_npz(loaded_ep)
+        # loaded_ep = None
+        # with np.load(outdir / f'{UID}.npz') as ep:
+        #     loaded_ep = {k: ep[k] for k in ep.keys()}
+        # playback_npz(loaded_ep)
 
 
 if __name__ == '__main__':
