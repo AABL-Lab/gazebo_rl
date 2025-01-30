@@ -59,16 +59,6 @@ def img_cb(data):
         # add the grayscale channel
         current_image = np.expand_dims(current_image, axis=-1)
 
-        # Expects a 0 - 1 range
-        circle_r = 15
-        circle_midpoint = (circle_r, cv_image.shape[0] - circle_r)
-        cv_image = draw_partial_circle(cv_image, circle_midpoint, circle_r, current_image[2] / 0.6, (255, 0, 0), -1)
-
-        draw_partial_circle(current_image, (48, 48), 48, 0.5, (255, 0, 0), 2)
-
-        # cv2.imshow("image", current_image)
-        # cv2.waitKey(1)
-
         dt = time.time() - image_time
         if dt > 5: print(f"WARN: image time: {dt} seconds.")
         image_time = time.time()
@@ -221,8 +211,6 @@ class BasicArm(gym.Env):
             low=-1.0, high=1.0, shape=(5,), dtype=np.float32
         )
 
-        self._episode_steps = 0
-
         self.last_step_time = time.time()
 
         self.crop_dim = 700
@@ -232,6 +220,7 @@ class BasicArm(gym.Env):
         self.start_time = time.time()
         fig, ax = plt.subplots(1, 2)
         self.fig = fig; self.ax = ax
+        self.plot_circle_height = True
 
     def _base_feedback_callback(self, msg: BaseCyclic_Feedback):
         '''
@@ -295,11 +284,17 @@ class BasicArm(gym.Env):
         
 
         reward = current_reward
-        if reward > 0:
-            is_last = True; is_terminal = True
-        else:
-            is_last = False; is_terminal = False
+        if reward > 0: is_last = True; is_terminal = True
+        else: is_last = False; is_terminal = False
 
+        if self.plot_circle_height:
+            z_value = state[2]
+            # draw a circle on the GRAYSCALE image
+            circle_r = int(np.ceil(top_img.shape[0] * 0.1))
+            circle_midpoint = (circle_r, top_img.shape[0] - circle_r)
+            top_img = draw_partial_circle(top_img, circle_midpoint, circle_r, z_value / 0.6, (255, 0, 0), -1)
+            # write out the top img as a check
+            cv2.imwrite("/home/j/workspace/top_img.png", top_img)
 
         return {
             "state": state,
@@ -468,20 +463,6 @@ class BasicArm(gym.Env):
                                 else:
                                     print(f"    OPEN GRIPPER")
                                     self.arm.send_gripper_command(0.1, mode = 'speed', duration = 200, relative=True, block=False)
-                            else:
-                                self.arm.send_gripper_command(0.0, mode = 'speed', duration = 200, relative=True, block=False)
-                                    
-
-
-                            #     gripper = True
-                            #     if action[6] > 0:
-                            #         print(f"    CLOSE GRIPPER")
-                            #         self.arm.close_gripper(block=False)
-                            #         # rospy.sleep(0.5)
-                            #     else:
-                            #         print(f"    OPEN GRIPPER")
-                            #         self.arm.open_gripper(block=False)
-                                    # rospy.sleep(0.5)
 
                             print(', '.join([f"{a:+1.2f}" for a in action]))
                             self.arm.cartesian_velocity_command(action[:6], duration=self.action_duration, radians=True, block=False)
@@ -524,8 +505,8 @@ class BasicArm(gym.Env):
         if FAULT:
             obs['is_last'] = True
             obs['is_terminal'] = True
-            obs['reward'] = -1.0
-            print(f"FAULT: returning done and -1.0 reward")
+            obs['reward'] = -1.0 * (self.config.time_limit - self.current_step) # put a negative reward for the time limit to prevent the agent from trying to fail early
+            print(f"FAULT: returning done and {obs['reward']} reward")
 
         return obs, obs['reward'], obs['is_last'], False, {}
 
