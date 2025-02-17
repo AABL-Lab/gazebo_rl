@@ -10,6 +10,8 @@ import time
 import armpy
 from kortex_driver.srv import *
 from kortex_driver.msg import *
+from sensor_msgs.msg import JointState
+
 from collections import defaultdict, deque
 import cv2
 
@@ -70,6 +72,8 @@ class BasicArm():
             self.workspace_limits = workspace_limits
 
         rospy.Subscriber(f"/{robot_name}/base_feedback", BaseCyclic_Feedback, self._base_feedback_callback)
+        rospy.Subscriber('/my_gen3_lite/base_feedback/joint_state', JointState, self.joint_state_callback)
+
         self.SAFETY_MODE = False
         self.safety_histories = {
             "x_tool_torque": deque(maxlen=10),
@@ -120,6 +124,9 @@ class BasicArm():
             else:
                 return None
     
+    def joint_state_callback(self, msg):
+        self.joint_state = msg
+
     def stop_motion(self):
         print("Stopping motion")
         self.arm.stop_arm()
@@ -140,17 +147,29 @@ class BasicArm():
             rospy.sleep(.25)
             self.arm.open_gripper()
             rospy.sleep(0.5)
-        if self.reset_pose is None:
+        if False: #self.reset_pose is None:
             self.arm.home_arm()
         else:
             if self.sim:
                 self.arm.goto_joint_pose_sim(self.reset_pose)
             else:
-                # first go up to avoid collisions
+                backup_position = [0.34551798719466237, -0.8454950565561763, 2.169129261535217, -1.232747441193471, 1.4586096006108726, -1.686383909690952] #, 0.5953540153613426]
                 target_joint_positions = [0.3268500269015339, -1.4471734542578538, 2.3453266624159497, -1.3502152158191212, 2.209384006676201, -1.5125125137062945] #, -0.0877648122691288]
-                self.arm.goto_cartesian_pose_old(target_joint_positions, relative=True, radians=True)
-                rospy.sleep(0.5)
-                self.arm.goto_joint_pose(self.reset_pose)
+
+
+                print(f"Opening gripper ", end='')
+                self.arm.open_gripper(); rospy.sleep(1.0) # deal with problems from switching between vel mode and pos mode.
+                print(f"Done.")
+
+                while self.joint_state is None:
+                    print(f"Waiting for joint state...")
+                    rospy.sleep(1.0)
+
+                for tjp in [backup_position, target_joint_positions]:
+                    while not np.allclose(self.joint_state.position[:6], tjp, atol=0.1):
+                        print(f"\tMoving to {tjp}. Distance from target {np.linalg.norm(np.array(self.joint_state.position[:6]) - np.array(tjp))}")
+                        self.arm.goto_joint_pose(tjp, radians=True, block=False)
+                        rospy.sleep(5.0)
             rospy.sleep(1)
         self.prev_eef = self.sync_copy_eef()
         return self.prev_eef
@@ -190,6 +209,8 @@ class BasicArm():
         
         # NOTE: temporary mapping to align with config
         action = [action[0] * 0.1222, action[1] * 0.1222, action[2] * 0.1222, 0., action[3], 0., action[4]]
+        # action = [action[0] * 2 * 0.1222, action[1] * 2 * 0.1222, action[2] * 2 * 0.1222, 0., action[3], 0., action[4]] # scale from [-0.5 0.5] to [-0.1222 0.1222]
+
         
         if self.velocity_control:
             # clip all but the last action idx
@@ -256,7 +277,6 @@ class BasicArm():
                         #         print(f"    OPEN GRIPPER")
                         #         self.arm.open_gripper(block=False)
                         #         rospy.sleep(0.5)
-
 
                         if abs(action[6]) > 0.8:
                             if action[6] > 0:

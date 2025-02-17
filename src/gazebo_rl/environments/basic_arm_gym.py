@@ -82,7 +82,7 @@ def eef_pose(msg):
     with eef_lock:
         global current_observation, eef_time
         gripper_pos = msg.interconnect.oneof_tool_feedback.gripper_feedback[0].motor[0].position
-        tool_pose = msg.base.tool_pose_x, msg.base.tool_pose_y, msg.base.tool_pose_z, msg.base.tool_pose_theta_x, msg.base.tool_pose_theta_y, msg.base.tool_pose_theta_z 
+        tool_pose = msg.base.tool_pose_x, msg.base.tool_pose_y, msg.base.tool_pose_z #, msg.base.tool_pose_theta_x, msg.base.tool_pose_theta_y, msg.base.tool_pose_theta_z 
         tool_v = msg.base.tool_twist_linear_x, msg.base.tool_twist_linear_y, msg.base.tool_twist_linear_z, msg.base.tool_twist_angular_x, msg.base.tool_twist_angular_y, msg.base.tool_twist_angular_z
         
         dt = time.time() - eef_time
