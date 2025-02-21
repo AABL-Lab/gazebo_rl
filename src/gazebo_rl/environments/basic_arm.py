@@ -208,9 +208,10 @@ class BasicArm():
         # Dont' normalize the gripper command (dimension 6)
         
         # NOTE: temporary mapping to align with config
-        action = [action[0] * 0.1222, action[1] * 0.1222, action[2] * 0.1222, 0., action[3], 0., action[4]]
+        # action = [action[0] * 0.1222, action[1] * 0.1222, action[2] * 0.1222, 0., action[3], 0., action[4]]
         # action = [action[0] * 2 * 0.1222, action[1] * 2 * 0.1222, action[2] * 2 * 0.1222, 0., action[3], 0., action[4]] # scale from [-0.5 0.5] to [-0.1222 0.1222]
 
+        action = list(action)
         
         if self.velocity_control:
             # clip all but the last action idx
