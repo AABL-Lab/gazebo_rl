@@ -48,11 +48,11 @@ class Camera():
         self.timestamp_fp = None
         self.frame_times = [] # for debugging
 
-        self.crop_dim = rospy.get_param('crop_dim', 700); 
-        self.crop_left_offset = rospy.get_param('crop_left_offset', 200)
+        self.crop_dim = rospy.get_param('crop_dim', 0)#700); 
+        self.crop_left_offset = rospy.get_param('crop_left_offset',0) # 200)
         
-        self.top_index = rospy.get_param('top_index', '4');
-        self.bottom_index = rospy.get_param('bottom_index', '0')
+        self.top_index = rospy.get_param('top_index', '0')
+        self.bottom_index = rospy.get_param('bottom_index', '4')
 
         print(f"{self.top_index=}, {self.bottom_index=} {self.camera.port=} {self.crop_dim=}, {self.crop_left_offset=}")
         if self.top_index in str(self.camera.port):
