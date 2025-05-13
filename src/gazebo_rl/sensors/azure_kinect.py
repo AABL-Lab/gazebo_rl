@@ -4,6 +4,7 @@ from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 import pykinect_azure as pykinect
 from std_msgs.msg import Header
+import numpy as np
 
 if __name__ == "__main__":
     # init ros node
@@ -64,6 +65,17 @@ if __name__ == "__main__":
 
             # list all the fields in the point cloud
             # from IPython import embed; embed()
+
+            # print the mean depth value across the point cloud
+            # mins = np.min(depth_data, axis=0)
+            # maxs = np.max(depth_data, axis=0)
+            # for i in range(3):
+            #     print(f"min: {mins[i]:.2f}, max: {maxs[i]:.2f}", end=', ')
+            # print()
+
+            # normalize the 3d point values
+            depth_data = depth_data / 1000.0 # mm to meters
+
 
             fields = [
                 PointField(name='x', offset=0,  datatype=PointField.FLOAT32, count=1),

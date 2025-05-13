@@ -5,7 +5,11 @@ from ultralytics import YOLO
 import rospy
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
-from geometry_msgs.msg import PoseStamped
+from sensor_msgs import point_cloud2
+from geometry_msgs.msg import PoseStamped, TransformStamped
+# from tf2_geometry_msgs import do_transform_pose
+import tf2_ros, tf
+import numpy as np
 
 class FinetunedYOLO:
     def __init__(self):
@@ -24,18 +28,24 @@ class FinetunedYOLO:
         results = self.model.predict(source=image, show=show, conf=0.25, iou=0.45, device="cuda:0")
         return results
     
-    def get_bounding_box(self, image):
+    def get_box_midpoint(self, image):
         results = self.predict(image, show=False)
         boxes = []
         for result in results:
             boxes.append(result.boxes.xyxy)
 
         # return the midpoint of the box
-        box_midpoints = []
-        for box in boxes:
-            box = box.cpu().numpy()
-            box = (box[:, 0] + box[:, 2]) / 2, (box[:, 1] + box[:, 3]) / 2
-            box_midpoints.append(box)
+        try:
+            box_midpoints = []
+            for box in boxes:
+                box = box.cpu().numpy()
+                if len(box) == 0: continue
+                x, y, x2, y2 = box[:, 0], box[:, 1], box[:, 2], box[:, 3]
+                midpoint = float((x + x2) / 2), float((y + y2) / 2)
+                box_midpoints.append(midpoint)
+        except Exception as e:
+            print(f"Error in get_box_midpoint: {e}")
+            box_midpoints = []
         return box_midpoints
     
 class CanDetector:
@@ -58,11 +68,33 @@ class CanDetector:
         # publish the 3D pose to ROS
         self.pub = rospy.Publisher('/can_detector/pose', PoseStamped, queue_size=10)
         self.pose = PoseStamped()
-        self.pose.header.frame_id = "map"
+        self.pose.header.frame_id = "kinect_link"
         self.pose.header.stamp = rospy.Time.now()
 
         # point cloud publisher
         self.point_cloud_pub = rospy.Publisher('/can_detector/point_cloud', PointCloud2, queue_size=1)
+
+        # static transform publisher
+        self.broadcaster = tf2_ros.StaticTransformBroadcaster()
+        transform = TransformStamped()
+        transform.header.stamp = rospy.Time.now()
+        transform.header.frame_id = "base_link"
+        transform.child_frame_id = "kinect_link"
+        transform.transform.translation.x = 0.02
+        transform.transform.translation.y = -0.32
+        transform.transform.translation.z = 0.22
+        euler = 1.23, 3.14, 1.97
+        q = tf.transformations.quaternion_from_euler(*euler)
+        transform.transform.rotation.x = q[0]; transform.transform.rotation.y = q[1]; transform.transform.rotation.z = q[2]; transform.transform.rotation.w = q[3]
+        self.broadcaster.sendTransform(transform)
+
+        # create a buffer and listener
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
+        # self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+        self.tf_listener = tf.TransformListener()
+        self.tf_listener.waitForTransform("base_link", "kinect_link", rospy.Time(0), rospy.Duration(10.0))
+
 
     def step(self):
         # Get capture
@@ -77,64 +109,81 @@ class CanDetector:
         # get the yolo results
         # conver bgra to bgr
         yolo_color_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGRA2BGR)
-        box_midpoints = self.model.get_bounding_box(yolo_color_image)
+        box_midpoints = self.model.get_box_midpoint(yolo_color_image)
 
-        if box_midpoints := self.model.get_bounding_box(yolo_color_image):
-            pix_x = int(box_midpoints[0][0])
-            pix_y = int(box_midpoints[0][1])
+        if box_midpoints := self.model.get_box_midpoint(yolo_color_image):
+            try:
+                pix_x = int(box_midpoints[0][0]) # grab first as default
+                pix_y = int(box_midpoints[0][1]) # grab first as default
 
-            for box in box_midpoints:
-                box = (box[0], box[1])
-                cv2.circle(self.color_image, (int(box[0]), int(box[1])), 5, (0, 255, 0), -1)
-
-        # Get the colored depth
-        ret_depth, transformed_depth_image = capture.get_transformed_depth_image()
-
-        if not ret_color or not ret_depth:
-            return
+                for box in box_midpoints:
+                    cv2.circle(yolo_color_image, (int(box[0]), int(box[1])), 5, (0, 255, 0), -1)
+                cv2.imshow('Transformed Color Image', yolo_color_image)
+                cv2.waitKey(1)
+            except Exception as e:
+                print(f"Error in box_midpoints: {e}")
+                from IPython import embed; embed()
         
-        rgb_depth = transformed_depth_image[pix_y, pix_x]
+            # Get the colored depth
+            ret_depth, transformed_depth_image = capture.get_transformed_depth_image()
 
-        pixels = k4a_float2_t((pix_x, pix_y))
+            if not ret_color or not ret_depth:
+                return
+            
+            rgb_depth = transformed_depth_image[pix_y, pix_x]
 
-        pos3d_color = self.device.calibration.convert_2d_to_3d(pixels, rgb_depth, K4A_CALIBRATION_TYPE_COLOR, K4A_CALIBRATION_TYPE_COLOR)
-        pos3d_depth = self.device.calibration.convert_2d_to_3d(pixels, rgb_depth, K4A_CALIBRATION_TYPE_COLOR, K4A_CALIBRATION_TYPE_DEPTH)
+            pixels = k4a_float2_t((pix_x, pix_y))
 
-        print(f"RGB depth: {rgb_depth}, RGB pos3D: {pos3d_color}, Depth pos3D: {pos3d_depth}")
+            pos3d_color = self.device.calibration.convert_2d_to_3d(pixels, rgb_depth, K4A_CALIBRATION_TYPE_COLOR, K4A_CALIBRATION_TYPE_COLOR)
+            pos3d_depth = self.device.calibration.convert_2d_to_3d(pixels, rgb_depth, K4A_CALIBRATION_TYPE_COLOR, K4A_CALIBRATION_TYPE_DEPTH)
 
-        self.pose.header.stamp = rospy.Time.now()
-        self.pose.pose.position.x = pos3d_depth.xyz.x / 1000
-        self.pose.pose.position.y = pos3d_depth.xyz.y / 1000
-        self.pose.pose.position.z = pos3d_depth.xyz.z / 1000
-        self.pose.pose.orientation.x = 0
-        self.pose.pose.orientation.y = 0
-        self.pose.pose.orientation.z = 0
-        self.pose.pose.orientation.w = 1
-        self.pub.publish(self.pose)
+            # print(f"RGB depth: {rgb_depth}, RGB pos3D: {pos3d_color}, Depth pos3D: {pos3d_depth}")
+
+            self.pose.header.stamp = rospy.Time.now()
+            self.pose.pose.position.x = pos3d_depth.xyz.x / 1000
+            self.pose.pose.position.y = pos3d_depth.xyz.y / 1000
+            self.pose.pose.position.z = pos3d_depth.xyz.z / 1000
+            self.pose.pose.orientation.x = 0
+            self.pose.pose.orientation.y = 0
+            self.pose.pose.orientation.z = 0
+            self.pose.pose.orientation.w = 1
+
+            # convert the pose from kinect_link to base_link
+            # transform = self.tf_buffer.lookup_transform("base_link", self.pose.header.frame_id, self.pose.header.stamp, timeout=rospy.Duration(0.1))
+            # pose_out = do_transform_pose(self.pose.pose, transform)
+        
+            pose_out = self.tf_listener.transformPose("base_link", self.pose)
+
+            self.pub.publish(pose_out)
 
         if PUBLISH_POINT_CLOUD := False:
             ret_points, points = capture.get_pointcloud()
             if not ret_points:
                 return
             points = points.reshape((-1, 3))
+            # Align with rviz convention. z = -y, y = x
+            # points[:, 0], points[:, 1], points[:, 2] = points[:, 1], points[:, 0], -points[:, 2]
             # Create a PointCloud2 message
             header = Header()
             header.stamp = rospy.Time.now()
-            header.frame_id = "map"
-            point_cloud_msg = PointCloud2()
-            point_cloud_msg.header = header
-            point_cloud_msg.height = 1
-            point_cloud_msg.width = len(points)
-            point_cloud_msg.fields = [
-                PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-                PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-                PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-            ]
-            point_cloud_msg.is_bigendian = False
-            point_cloud_msg.point_step = 12
-            point_cloud_msg.row_step = point_cloud_msg.point_step * point_cloud_msg.width
-            point_cloud_msg.is_dense = True
-            point_cloud_msg.data = points.tobytes()
+            header.frame_id = "kinect_link"
+            # point_cloud_msg = PointCloud2()
+            # point_cloud_msg.header = header
+            # point_cloud_msg.height = 1
+            # point_cloud_msg.width = len(points)
+            # point_cloud_msg.fields = [
+            #     PointField(name='x', offset=0, datatype=PointField.FLOAT16, count=1),
+            #     PointField(name='y', offset=4, datatype=PointField.FLOAT16, count=1),
+            #     PointField(name='z', offset=8, datatype=PointField.FLOAT16, count=1),
+            # ]
+            # point_cloud_msg.is_bigendian = False
+            # point_cloud_msg.point_step = 12
+            # point_cloud_msg.row_step = point_cloud_msg.point_step * point_cloud_msg.width
+            # point_cloud_msg.is_dense = True
+            # point_cloud_msg.data = points.tobytes()
+            # Create a PointCloud2 message using the point_cloud2 module
+            point_cloud_msg = point_cloud2.create_cloud_xyz32(header, points.astype(np.float32)/1000)
+
             self.point_cloud_pub.publish(point_cloud_msg)
 
 
@@ -182,9 +231,9 @@ if __name__ == "__main__":
     #     yolo_color_image = cv2.cvtColor(color_image, cv2.COLOR_BGRA2BGR)
     #     # results = model.model.predict(source=yolo_color_image, show=True, conf=0.25, iou=0.45, device="cuda:0")
     #     # results = model.predict(yolo_color_image, show=True)
-    #     box_midpoints = model.get_bounding_box(yolo_color_image)
+    #     box_midpoints = model.get_box_midpoint(yolo_color_image)
 
-    #     if box_midpoints := model.get_bounding_box(yolo_color_image):
+    #     if box_midpoints := model.get_box_midpoint(yolo_color_image):
     #         pix_x = int(box_midpoints[0][0])
     #         pix_y = int(box_midpoints[0][1])
 
