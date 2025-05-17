@@ -49,7 +49,9 @@ class FinetunedYOLO:
         return box_midpoints
     
 class CanDetector:
-    def __init__(self):
+    def __init__(self, publish_point_cloud=False):
+        self.publish_point_cloud = publish_point_cloud
+        print(f"Initializing CanDetector {publish_point_cloud=}")
         # Initialize the library, if the library is not found, add the library path as argument
         pykinect.initialize_libraries()
 
@@ -156,7 +158,7 @@ class CanDetector:
 
             self.pub.publish(pose_out)
 
-        if PUBLISH_POINT_CLOUD := False:
+        if self.publish_point_cloud:
             ret_points, points = capture.get_pointcloud()
             if not ret_points:
                 return
@@ -188,10 +190,15 @@ class CanDetector:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Can Detector")
+    parser.add_argument('-pc', '--publish_point_cloud', action='store_true', help="Publish point cloud")
+    args = parser.parse_args()
+
     # Initialize the ROS node
     rospy.init_node('can_detector', anonymous=True)
     # Initialize the CanDetector class
-    can_detector = CanDetector()
+    can_detector = CanDetector(args.publish_point_cloud)
     # Create a named window for displaying the color image
     cv2.namedWindow('Transformed Color Image', cv2.WINDOW_NORMAL)
     rate = rospy.Rate(30)  # 30 Hz
