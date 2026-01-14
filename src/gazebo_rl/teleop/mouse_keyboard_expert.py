@@ -12,8 +12,12 @@ from pynput import mouse, keyboard
 
 # Define the UIInterface
 class UIInterface:
+    button_order = ['n/a']
     def get_action(self):
         raise NotImplementedError
+
+    def get_button_order(self):
+        return self.__class__.button_order
 
 # Implement the MouseKeyboardExpert class using pynput
 class MouseKeyboardExpert(UIInterface):
@@ -168,7 +172,10 @@ class MouseKeyboardExpert(UIInterface):
             # Return a copy of the current action and buttons
             action_copy = self.action.copy()
             buttons_copy = self.buttons.copy()
-        return action_copy, buttons_copy
+
+            button_order = ['mouse_left', 'mouse_button9', 'mouse_button8']  # Adjust based on actual buttons
+            buttons = [int(buttons.get(button, 0)) for button in button_order]
+        return action_copy, buttons
 
 def main():
     import time

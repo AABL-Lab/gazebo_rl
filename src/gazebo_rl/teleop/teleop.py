@@ -7,6 +7,7 @@ import numpy as np
 # Import the UIInterface and the specific UI class you want to use
 from ui_interface import UIInterface
 from mouse_keyboard_expert import MouseKeyboardExpert
+from spacemouse_expert import SpaceMouseExpert  
 
 class RobotControlNode:
     def __init__(self, ui: UIInterface):
@@ -24,23 +25,20 @@ class RobotControlNode:
             self.pub.publish(joy_msg)
             self.rate.sleep()
 
-    def process_action(self, action: np.ndarray, buttons: dict) -> Joy:
+    def process_action(self, action: np.ndarray, buttons: list) -> Joy:
         # Convert action and buttons to Joy message
         joy = Joy()
         # Map the action array to the axes field
         joy.axes = action.tolist()
 
-        # Map the buttons dictionary to the buttons field
-        # Assuming buttons is a dictionary with button names as keys and boolean values
-        # Define the order of buttons to maintain consistency
-        button_order = ['mouse_left', 'mouse_button9', 'mouse_button8']  # Adjust based on actual buttons
-        joy.buttons = [int(buttons.get(button, 0)) for button in button_order]
+        joy.buttons = buttons
 
         return joy
 
 def main():
     # Instantiate the UI object (can be swapped with other UI implementations)
-    ui = MouseKeyboardExpert()
+    # ui = MouseKeyboardExpert()
+    ui = SpaceMouseExpert()
     robot_control_node = RobotControlNode(ui)
     try:
         robot_control_node.run()
